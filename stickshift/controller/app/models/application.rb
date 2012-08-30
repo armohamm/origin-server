@@ -1,4 +1,6 @@
 require 'matrix'
+require 'beanstalk-client'
+
 class Matrix
   def []=(i, j, x)
     @rows[i][j] = x
@@ -1002,11 +1004,13 @@ class Application
     end
   end
   
-  def add_pending_op(op)
-    self.pending_ops.push(op)
+  def add_pending_op(*ops)
+    ops = [ops] unless ops.class == Array
+    self.pending_ops.push(*ops)
+    
     begin
       beanstalk = Beanstalk::Pool.new(['127.0.0.1:11300'])
-      beanstalk.yput({application_id: self._id.to_s, op: op._id.to_s})
+      beanstalk.yput({object: :application, id: self._id.to_s, op_ids: ops.map{|o| o._id.to_s}})
     rescue Exception => e
       Rails.logger.error "Unable to push message to beanstald #{e.message} #{e.backtrace.join("\n")}"
     end

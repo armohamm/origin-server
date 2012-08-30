@@ -54,4 +54,8 @@ Broker::Application.configure do
     :domain_suffix => "example.com",
     :default_max_gears => 100
   }
+  
+  config.beanstalk = {
+    :beanstalkd_pool => ['127.0.0.1:11300']
+  }
 end
