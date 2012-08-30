@@ -9,12 +9,21 @@ class CartridgesController < BaseController
   # GET /cartridges
   def index
     type = params[:id]
+    
     if type.nil?
       cartridges = CartridgeCache.cartridges
     else
-      cartridges = CartridgeCache.cartridges.keep_if{ |c| c.categories.include?(type) }
+      cartridges = CartridgeCache.find_cartridge_by_category(type)
     end
     
-    render_success(:ok, "cartridges", cartridges.map{|c| RestCartridge11.new(nil,c,nil,nil,get_url,nolinks)}, "LIST_CARTRIDGES", "List #{type.nil? ? 'all' : type} cartridges") 
+    rest_cartridges = cartridges.map do |cartridge|
+      if $requested_api_version >= 1.1
+        RestCartridge11.new(type, cartridge, nil, get_url, nolinks)
+      else
+        RestCartridge10.new(type, cartridge, nil, get_url, nolinks)
+      end
+    end
+    
+    render_success(:ok, "cartridges", rest_cartridges, "LIST_CARTRIDGES", "List #{type.nil? ? 'all' : type} cartridges") 
   end
 end

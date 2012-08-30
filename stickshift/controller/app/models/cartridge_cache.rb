@@ -23,6 +23,7 @@ class CartridgeCache
   end
   
   def self.find_cartridge_by_category(cat)
+    cat = "web_framework" if cat == "standalone"
     CacheHelper.get_cached("cartridges_by_cat_#{cat}", :expires_in => 1.day) {cartridges.select{|cart| cart.categories.include?(cat) }}
   end
 

@@ -15,8 +15,17 @@ class AppCartController < BaseController
     
     begin
       application = Application.find_by(domain: domain, name: id)
-      cartridges = application.component_instances.map{ |c| RestCartridge11.new(nil,CartridgeCache.find_cartridge(c.cartridge_name),application,c,get_url,nolinks) }
-      render_success(:ok, "cartridges", cartridges, "LIST_APP_CARTRIDGES", "Listing cartridges for application #{id} under domain #{domain_id}")
+      
+      rest_cartridges = application.component_instances.map do |component_instance|
+        cartridge = CartridgeCache.find_cartridge(component_instance.cartridge_name)
+        if $requested_api_version >= 1.1
+          RestCartridge11.new(type, cartridge, application, component_instance, get_url, nolinks)
+        else
+          RestCartridge10.new(type, cartridge, application, component_instance, get_url, nolinks)
+        end
+      end
+      
+      render_success(:ok, "cartridges", rest_cartridges, "LIST_APP_CARTRIDGES", "Listing cartridges for application #{id} under domain #{domain_id}")
     rescue Mongoid::Errors::DocumentNotFound
       return render_error(:not_found, "Application '#{id}' not found for domain '#{domain_id}'", 101, "LIST_APP_CARTRIDGES")
     end
@@ -36,7 +45,15 @@ class AppCartController < BaseController
     
     begin
       application = Application.find_by(domain: domain, name: application_id)
-      comp = application.component_instances.find_by(cartridge_name: id)
+      component_instances = application.component_instances.find_by(cartridge_name: id)
+      
+      cartridge = CartridgeCache.find_cartridge(component_instances.cartridge_name)
+      if $requested_api_version >= 1.1
+        RestCartridge11.new(type, cartridge, application, component_instance, get_url, nolinks)
+      else
+        RestCartridge10.new(type, cartridge, application, component_instance, get_url, nolinks)
+      end
+      
       cartridge = RestCartridge11.new(nil,CartridgeCache.find_cartridge(comp.cartridge_name),application,comp,get_url,nolinks)
       
       return render_success(:ok, "cartridge", cartridge, "SHOW_APP_CARTRIDGE", "Showing cartridge #{id} for application #{application_id} under domain #{domain_id}")

@@ -95,7 +95,7 @@ class Application
     raise StickShift::UserException.new("Alias #{fqdn} is already registered") if Application.where(aliases: fqdn).count > 0
     aliases.push(fqdn)
     pending_op = PendingAppOps.new(op_type: :add_alias, args: {"fqdn" => fqdn})
-    pending_ops.push(pending_op)
+    add_pending_op(pending_op)
     return pending_op
   end
   
@@ -111,7 +111,7 @@ class Application
     return unless aliases.include? fqdn
     aliases.delete(fqdn)
     pending_op = PendingAppOps.new(op_type: :remove_alias, args: {"fqdn" => fqdn})
-    pending_ops.push(pending_op)
+    add_pending_op(pending_op)
     return pending_op
   end
   
@@ -153,7 +153,7 @@ class Application
   # {PendingAppOps} object which tracks the progess of the operation.  
   def update_namespace(new_namespace, pending_parent_op=nil)
     op = PendingAppOps.new(op_type: :add_namespace, args: pending_parent_op.args, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     op
   end
   
@@ -170,7 +170,7 @@ class Application
   # {PendingAppOps} object which tracks the progess of the operation.  
   def remove_namespace(old_namespace, pending_parent_op=nil)
     op = PendingAppOps.new(op_type: :remove_namespace, args: pending_parent_op.args, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     op
   end
 
@@ -197,7 +197,7 @@ class Application
       k
     }
     pending_op = PendingAppOps.new(op_type: :update_configuration, args: {"add_keys_attrs" => key_attrs}, parent_op: pending_parent_op)
-    pending_ops.push(pending_op)
+    add_pending_op(pending_op)
     return pending_op
   end
   
@@ -220,7 +220,7 @@ class Application
       k
     }
     op = PendingAppOps.new(op_type: :update_ssh_keys, args: {"keys" => keys_attrs}, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     return op
   end
   
@@ -248,19 +248,19 @@ class Application
       k
     }
     op = PendingAppOps.new(op_type: :update_configuration, args: {"remove_keys_attrs" => key_attrs}, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     op
   end
   
   def add_env_variables(vars, pending_parent_op=nil)
     op = PendingAppOps.new(op_type: :update_configuration, args: {"add_env_variables" => vars}, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     op
   end
   
   def remove_env_variables(vars, pending_parent_op=nil)
     op = PendingAppOps.new(op_type: :update_configuration, args: {"remove_env_variables" => vars}, parent_op: pending_parent_op)
-    pending_ops.push(op)
+    add_pending_op(op)
     op
   end
   
@@ -308,7 +308,7 @@ class Application
   # StickShift::UserException if there are existing operations in progress that will change application structure.  
   def destroy_app
     self.requires = []
-    pending_ops.push(PendingAppOps.new(op_type: :delete_app))
+    add_pending_op(PendingAppOps.new(op_type: :delete_app))
   end
   
   # Updates the feature requirements of the application and create tasks to perform the update.
@@ -425,7 +425,7 @@ class Application
         raise StickShift::GearLimitReachedException.new("#{owner.login} is currently using #{owner.consumed_gears} out of #{owner.capabilities["max_gears"]} limit and this application requires #{num_gears} additional gears.")
       end
       owner.consumed_gears += num_gears
-      pending_ops.push(*ops)
+      add_pending_op(*ops)
       owner.save
     ensure
       Lock.unlock_user(owner)
@@ -769,7 +769,7 @@ class Application
       pending_op = PendingAppOps.new(op_type: :update_configuration, args: {"remove_keys_attrs" => keys_attrs})
       Application.where(_id: self._id).update_all({ "$push" => { pending_ops: pending_op.serializable_hash } , "$pullAll" => { app_ssh_keys: keys_attrs }})
     end
-    pending_ops.push(PendingAppOps.new(op_type: :update_configuration, args: {
+    add_pending_op(PendingAppOps.new(op_type: :update_configuration, args: {
       "add_keys_attrs" => domain_keys_to_add.map{|k| k.attributes.dup},
       "remove_keys_attrs" => domain_keys_to_rm.map{|k| k.attributes.dup},
       "add_env_vars" => env_vars_to_add,
@@ -999,6 +999,16 @@ class Application
       end
     else
       return false
+    end
+  end
+  
+  def add_pending_op(op)
+    self.pending_ops.push(op)
+    begin
+      beanstalk = Beanstalk::Pool.new(['127.0.0.1:11300'])
+      beanstalk.yput({application_id: self._id.to_s, op: op._id.to_s})
+    rescue Exception => e
+      Rails.logger.error "Unable to push message to beanstald #{e.message} #{e.backtrace.join("\n")}"
     end
   end
 

@@ -121,9 +121,9 @@ class GroupInstance
         result_io.append GroupInstance.update_configuration(ssh_keys, [], self.application.domain.env_vars, [], new_gears)
       rescue
         gear_ids = new_gears.map{|g| g._id.to_s}
-        self.application.pending_ops.push(PendingAppOps.new(op_type: :update_configuration, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids}))
+        self.application.add_pending_op(PendingAppOps.new(op_type: :update_configuration, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids}))
         self.component_instances.each do |component_instance_id|
-          self.application.pending_ops.push(PendingAppOps.new(op_type: :configure_component_on_gears, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids, "component_instance_id" => component_instance_id}, flag_req_change: true))
+          self.application.add_pending_op(PendingAppOps.new(op_type: :configure_component_on_gears, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids, "component_instance_id" => component_instance_id}, flag_req_change: true))
         end
         raise
       end
@@ -134,19 +134,19 @@ class GroupInstance
         if result_io.exitcode != 0
           gear_ids = new_gears.map{|g| g._id.to_s}
           pending_component_ids.each do |component_instance_id|
-            self.application.pending_ops.push(PendingAppOps.new(op_type: :configure_component_on_gears, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids, "component_instance_id" => component_instance_id}, flag_req_change: true))
+            self.application.add_pending_op(PendingAppOps.new(op_type: :configure_component_on_gears, args: {"group_instance_id" => _id.to_s, "gear_ids" => gear_ids, "component_instance_id" => component_instance_id}, flag_req_change: true))
           end
           raise "Unable to complte configuration of #{component_instance.cartridge_name} on #{gear_ids.join(",")}"
         end
         pending_component_ids.delete component_instance._id
       end
-      self.application.pending_ops.push(PendingAppOps.new(op_type: :execute_connections, args: {}))
+      self.application.add_pending_op(PendingAppOps.new(op_type: :execute_connections, args: {}))
     end
     
     #scale down
     if(gears.count > self.current_scale)
       GroupInstance.run_on_gears(self.gears[self.current_scale..gears.count], result_io, false) { |gear,result_io| result_io.append gear.destroy }
-      self.application.pending_ops.push(PendingAppOps.new(op_type: :execute_connections, args: {}))      
+      self.application.add_pending_op(PendingAppOps.new(op_type: :execute_connections, args: {}))      
     end
     
     result_io
