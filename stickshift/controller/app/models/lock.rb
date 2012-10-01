@@ -10,7 +10,8 @@ class Lock
   
   has_and_belongs_to_many :apps, class_name: Application.name, inverse_of: nil
   belongs_to :user, class_name: CloudUser.name
-  field :locked, type:Boolean
+  field :locked, type: Boolean, default: false
+  field :timeout, type: Integer, default: 0
 
   # Attempts to lock the {CloudUser}. Once locked, no other threads can obtain a lock on the {CloudUser} or any owned {Application}s.
   # This lock is denied if any of the {Application}s owned by the {CloudUser} are currently locked.
@@ -21,10 +22,12 @@ class Lock
   #
   # == Returns:
   # True if the lock was succesful.
-  def self.lock_user(user)
+  def self.lock_user(user, app)
     begin
-      lock = Lock.where( { user_id: user._id, locked: false, app_ids: []} ).find_and_modify( {"$set" => { user_id: user._id, locked: true, app_ids: []}}, upsert: true, new:true)
-      return (lock.user == user and lock.locked)
+      timenow = Time.now.to_i
+      lock = Lock.find_or_create_by( :user_id => user._id )
+      lock = Lock.where( {:user_id => user._id, "$or" => [{:locked => false}, {:timeout.lte => timenow}], :app_ids.in => [app._id]} ).find_and_modify( {"$set" => { locked: true, timeout: (timenow+600) }}, new:true)
+      return (not lock.nil?)
     rescue Moped::Errors::OperationFailure
       return false
     end
@@ -38,10 +41,10 @@ class Lock
   #
   # == Returns:
   # True if the unlock was succesful.
-  def self.unlock_user(user)
+  def self.unlock_user(user, app)
     begin    
-      lock = Lock.where( { user_id: user._id, locked: true, app_ids: []} ).find_and_modify( {"$set" => { user_id: user._id, locked: false, app_ids: []}}, upsert: true, new:false)
-      return (lock.user == user and lock.locked)
+      lock = Lock.where( { :user_id => user._id, :locked => true, :app_ids.in => [app._id]} ).find_and_modify( {"$set" => { "locked" => false}}, new:false)
+      return (not lock.nil?)
     rescue Moped::Errors::OperationFailure
       return false
     end    
@@ -59,8 +62,8 @@ class Lock
   def self.lock_application(application)
     begin    
       user_id = application.domain.owner_id
-      lock = Lock.where( { user_id: user_id, locked: false, :app_ids.ne => application._id} ).find_and_modify( {"$set" => { user_id: user_id, locked: false}, "$push"=> {app_ids: application._id}}, upsert: true, new:true)
-      return (lock.user_id == user_id and !lock.locked and lock.app_ids.include?(application._id))
+      lock = Lock.where( { :user_id => user_id, :app_ids.nin => [application._id] } ).find_and_modify( {"$push"=> {app_ids: application._id}}, new:true)
+      return (not lock.nil?)
     rescue Moped::Errors::OperationFailure
       return false
     end      
@@ -77,8 +80,8 @@ class Lock
   def self.unlock_application(application)
     begin    
       user_id = application.domain.owner_id
-      lock = Lock.where( { user_id: user_id, locked: false, app_ids: application._id} ).find_and_modify( {"$set" => { user_id: user_id, locked: false}, "$pop"=> {app_ids: application._id}}, upsert: true, new:false)
-      return (lock.user_id == user_id and !lock.locked and lock.app_ids.include?(application._id))
+      lock = Lock.where( { user_id: user_id, locked: false, :app_ids.in => [application._id]} ).find_and_modify( {"$pop"=> {app_ids: application._id}}, new:false)
+      return (not lock.nil?)
     rescue Moped::Errors::OperationFailure
       return false
     end

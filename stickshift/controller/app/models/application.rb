@@ -346,8 +346,8 @@ class Application
         end
       }
     }
+    self.remove_features(self.requires)
     Application.run_in_application_lock(self) do
-      self.remove_features(self.requires)
       self.pending_op_groups.push PendingAppOpGroup.new(op_type: :delete_app)
       result_io = ResultIO.new
       self.run_jobs(result_io)
@@ -1397,7 +1397,7 @@ class Application
   def try_reserve_gears(num_gears_added, num_gears_removed, op_group, ops)
     owner = self.domain.owner
     begin
-      until Lock.lock_user(owner)
+      until Lock.lock_user(owner, self)
         sleep 1
       end
       owner.reload
@@ -1411,7 +1411,7 @@ class Application
       op_group.save
       owner.save
     ensure
-      Lock.unlock_user(owner)
+      Lock.unlock_user(owner, self)
     end
   end
 
@@ -1419,14 +1419,14 @@ class Application
     return if num_gears_removed == 0
     owner = self.domain.owner
     begin
-      until Lock.lock_user(owner)
+      until Lock.lock_user(owner, self)
         sleep 1
       end
       owner.reload
       owner.consumed_gears -= num_gears_removed
       owner.save
     ensure
-      Lock.unlock_user(owner)
+      Lock.unlock_user(owner, self)
     end
   end
 
