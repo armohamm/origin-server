@@ -1,4 +1,6 @@
 class LegacyRequest < OpenShift::Model
+  include ActiveModel::Validations  
+  
   attr_accessor :namespace, :rhlogin, :ssh, :app_uuid, :app_name, :node_profile, :debug, :alter, :delete, :cartridge, :api, :cart_type, :action, :server_alias, :api, :key_name, :key_type
   attr_reader   :invalid_keys
   
@@ -28,7 +30,7 @@ class LegacyRequest < OpenShift::Model
   end
   
   validates_each :key_type, :allow_nil =>true do |record, attribute, val|
-    if !Key::VALID_SSH_KEY_TYPES.include?(val)
+    if !(val =~ /\A(ssh-rsa|ssh-dss)\z/)
       record.errors.add attribute, {:message => "Invalid key type: #{val}", :exit_code => 116}
     end
   end
@@ -97,7 +99,7 @@ class LegacyRequest < OpenShift::Model
   end
 
   validates_each :server_alias, :allow_nil =>true do |record, attribute, val|
-    if !(val =~ /\A[\w\-\.]+\z/) or (val =~ /#{Rails.configuration.openshift[:domain_suffix]}$/)
+    if !(val =~ /\A[\w\-\.]+\z/) or (val =~ /#{Rails.configuration.ss[:domain_suffix]}$/)
       record.errors.add attribute, {:message => "Invalid ServerAlias specified: #{val}", :exit_code => 105}
     end
   end
@@ -112,6 +114,12 @@ class LegacyRequest < OpenShift::Model
   
   def delete
     @delete == "true" || @delete == true
+  end
+  
+  def from_json(data)
+    data = JSON.parse(data) if data.class == String
+    self.attributes=data
+    self
   end
 
   def attributes=(hash)

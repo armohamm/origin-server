@@ -1,6 +1,5 @@
 class RestReply < OpenShift::Model
   attr_accessor :version, :status, :type, :data, :messages, :supported_api_versions
-
   
   def initialize(status=nil, type=nil, data=nil)
     self.status = status

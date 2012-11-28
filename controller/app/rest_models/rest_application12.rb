@@ -1,64 +1,58 @@
-class RestApplication < OpenShift::Model
-  attr_accessor :framework, :creation_time, :uuid, :embedded, :aliases, :name, :gear_count, :links, :domain_id, 
-  :git_url, :app_url, :ssh_url, :gear_profile, :scalable, :health_check_path, :building_with, :building_app, 
-  :build_job_url, :initial_git_url
-  include LegacyBrokerHelper
+class RestApplication12 < OpenShift::Model
+  attr_accessor :framework, :creation_time, :uuid, :embedded, :aliases, :name, :gear_count, :links, :domain_id, :git_url, :app_url, :ssh_url,
+   :building_with, :building_app, :build_job_url, :scalable, :health_check_path, :gear_profile
 
   def initialize(app, url, nolinks=false)
-    self.framework = app.framework
+    self.embedded = {}
+    app.requires(true).each do |feature|
+      cart = CartridgeCache.find_cartridge(feature)
+      if cart.categories.include? "web_framework"
+        self.framework = cart.name
+      else
+        self.embedded[cart.name] = {info: {}}
+      end
+    end
+
     self.name = app.name
-    self.creation_time = app.creation_time
-    self.uuid = app.uuid
-    self.aliases = app.aliases || Array.new
-    self.gear_count = (app.gears.nil?) ? 0 : app.gears.length
-    self.embedded = app.embedded
+    self.creation_time = app.created_at
+    self.uuid = app._id.to_s
+    self.aliases = app.aliases
+    self.gear_count = app.num_gears
     self.domain_id = app.domain.namespace
-    self.gear_profile = app.node_profile
+
+    self.gear_profile = app.default_gear_size
     self.scalable = app.scalable
-    self.git_url = "ssh://#{@uuid}@#{@name}-#{@domain_id}.#{Rails.configuration.openshift[:domain_suffix]}/~/git/#{@name}.git/"
-    self.app_url = "http://#{@name}-#{@domain_id}.#{Rails.configuration.openshift[:domain_suffix]}/"
-    self.ssh_url = "ssh://#{@uuid}@#{@name}-#{@domain_id}.#{Rails.configuration.openshift[:domain_suffix]}"
-    self.health_check_path = app.health_check_path
+
+    self.git_url = "ssh://#{app.ssh_uri}/~/git/#{@name}.git/"
+    self.app_url = "http://#{app.fqdn}/"
+    self.ssh_url = "ssh://#{app.ssh_uri}"
+    self.health_check_path = "" #app.health_check_path
+
     self.building_with = nil
     self.building_app = nil
     self.build_job_url = nil
-    self.initial_git_url = app.init_git_url
-    
-    app.embedded.each { |cname, cinfo|
-      cart = CartridgeCache::find_cartridge(cname)
-      if cart.categories.include? "ci_builder"
-        self.building_with = cart.name
-        self.build_job_url = cinfo["job_url"]
-        break
-      end
-    }
-    app.user.applications.each { |user_app|
-      cart = CartridgeCache::find_cartridge(user_app.framework)
-      if cart.categories.include? "ci"
-        self.building_app = user_app.name
-        break
-      end
-    }
 
-    cart_type = "embedded"
-    cache_key = "cart_list_#{cart_type}"
-    unless nolinks
-      carts = nil
-      if app.scalable
-        carts = Application::SCALABLE_EMBEDDED_CARTS
-      else
-        carts = get_cached(cache_key, :expires_in => 21600.seconds) do
-          Application.get_available_cartridges("embedded")
+    app.component_instances.each do |component_instance|
+      cart = CartridgeCache::find_cartridge(component_instance.cartridge_name)
+      if cart.categories.include?("ci_builder")
+        self.building_with = cart.name
+        self.build_job_url = component_instance.properties["job_url"]
+        break
+      end
+    end
+
+    app.domain.applications.each do |domain_app|
+      domain_app.component_instances.each do |component_instance|
+        cart = CartridgeCache::find_cartridge(component_instance.cartridge_name)
+        if cart.categories.include?("ci")
+          self.building_app = user_app.name
+          break
         end
       end
-      # Update carts list
-      # - remove already embedded carts
-      # - remove conflicting carts
-      app.embedded.keys.each do |cname|
-        carts -= [cname]
-        cinfo = CartridgeCache.find_cartridge(cname)
-        carts -= cinfo.conflicts_feature if defined?(cinfo.conflicts_feature)
-      end if !app.embedded.empty?
+    end
+
+    unless nolinks
+      carts = CartridgeCache.find_cartridge_by_category("embedded").map{ |c| c.name }
 
       self.links = {
         "GET" => Link.new("Get application", "GET", URI::join(url, "domains/#{@domain_id}/applications/#{@name}")),
@@ -100,21 +94,20 @@ class RestApplication < OpenShift::Model
         "SCALE_DOWN" => Link.new("Scale down application", "POST", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/events"), [
           Param.new("event", "string", "event", "scale-down")
         ]),
-        "TIDY" => Link.new("Tidy the application framework", "POST", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/events"), [
-          Param.new("event", "string", "event", "tidy")
-        ]),
-        "RELOAD" => Link.new("Reload the application", "POST", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/events"), [
-          Param.new("event", "string", "event", "reload")
-        ]),
         "THREAD_DUMP" => Link.new("Trigger thread dump", "POST", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/events"), [
           Param.new("event", "string", "event", "thread-dump")
         ]),
         "DELETE" => Link.new("Delete application", "DELETE", URI::join(url, "domains/#{@domain_id}/applications/#{@name}")),
         "ADD_CARTRIDGE" => Link.new("Add embedded cartridge", "POST", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/cartridges"),[
-          Param.new("cartridge", "string", "framework-type, e.g.: mongodb-2.2", carts)
-        ]),
-        "LIST_CARTRIDGES" => Link.new("List embedded cartridges", "GET", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/cartridges")),
-        "DNS_RESOLVABLE" => Link.new("Resolve DNS", "GET", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/dns_resolvable"))
+            Param.new("name", "string", "framework-type, e.g.: mongodb-2.0", carts)
+          ],[
+            OptionalParam.new("colocate_with", "string", "The component to colocate with", app.component_instances.map{|c| c.cartridge_name}),
+            OptionalParam.new("scales_from", "integer", "Minumimum number of gears to run the component on."),
+            OptionalParam.new("scales_to", "integer", "Maximum number of gears to run the component on."),
+            OptionalParam.new("additional_storage", "integer", "Additional GB of space to request on all gears running this component."),
+          ]
+        ),
+        "LIST_CARTRIDGES" => Link.new("List embedded cartridges", "GET", URI::join(url, "domains/#{@domain_id}/applications/#{@name}/cartridges"))
       }
     end
   end
