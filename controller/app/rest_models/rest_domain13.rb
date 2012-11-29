@@ -6,7 +6,7 @@ class RestDomain13 < OpenShift::Model
     self.suffix = Rails.application.config.openshift[:domain_suffix] 
     
     unless nolinks      
-      valid_sizes = OpenShift::ApplicationContainerProxy.valid_gear_sizes(domain.user)
+      valid_sizes = OpenShift::ApplicationContainerProxy.valid_gear_sizes(domain.owner)
       blacklisted_words = OpenShift::ApplicationContainerProxy.get_blacklisted
       carts = CartridgeCache.cartridge_names()
 

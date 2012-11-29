@@ -5,7 +5,7 @@ class CartridgeCache
   
   # Returns an Array of Cartridge objects
   def self.cartridges
-    CacheHelper.get_cached("all_cartridges", :expires_in => 1.day) {ApplicationContainerProxy.find_one().get_available_cartridges}
+    CacheHelper.get_cached("all_cartridges", :expires_in => 1.day) { ::OpenShift::ApplicationContainerProxy.find_one().get_available_cartridges }
   end
 
   # Returns an Array of cartridge names.

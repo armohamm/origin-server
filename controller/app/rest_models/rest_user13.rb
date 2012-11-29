@@ -1,4 +1,4 @@
-class RestUser12 < OpenShift::Model
+class RestUser13 < OpenShift::Model
   attr_accessor :login, :consumed_gears, :capabilities, :plan_id, :usage_account_id, :links, :consumed_gear_sizes
 
   def initialize(cloud_user, url, nolinks=false)

@@ -5,7 +5,7 @@
 #   @return [String] The name of the action to perfrom
 # @!attribute [r] args
 #   @return [Array[String]] arguments to pass to the action hook
-class RemoteJob < StickShift::Model
+class RemoteJob < OpenShift::Model
   attr_accessor :cartridge, :action, :args
   
   # Creates a new RemoteJob
@@ -63,7 +63,7 @@ class RemoteJob < StickShift::Model
   #   The parallel job handle
   def self.execute_parallel_jobs(handle)
     begin
-      StickShift::ApplicationContainerProxy.execute_parallel_jobs(handle)
+      OpenShift::ApplicationContainerProxy.execute_parallel_jobs(handle)
     rescue Exception=>e
       Rails.logger.error e.message
       Rails.logger.error e.inspect

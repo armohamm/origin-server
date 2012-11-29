@@ -16,5 +16,4 @@ module OpenShift
         "Components" => self.components
       }
     end
-  end
-end
+  e

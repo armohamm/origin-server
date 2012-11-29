@@ -1,14 +1,3 @@
-require 'action_dispatch/http/mime_types'
-module Mime
-  class Type
-    class << self
-      def lookup(string)
-         LOOKUP[string.split(';').first]
-       end
-    end
-  end
-end
-
 class BaseController < ActionController::Base
   respond_to :json, :xml
   before_filter :check_version, :only => :show
@@ -19,6 +8,17 @@ class BaseController < ActionController::Base
   
   #Mongoid.logger.level = Logger::WARN
   #Moped.logger.level = Logger::WARN
+  
+  before_filter :set_locale
+  def set_locale
+    # if params[:locale] is nil then I18n.default_locale will be used
+    I18n.locale = nil
+  end
+
+  # Override default Rails responder to return status code and objects from PUT/POST/DELETE requests
+  def respond_with(*arguments)
+    super(arguments, :responder => OpenShift::Responder)
+  end
   
   def show
     blacklisted_words = OpenShift::ApplicationContainerProxy.get_blacklisted
@@ -35,9 +35,19 @@ class BaseController < ActionController::Base
         "LIST_TEMPLATES" => Link.new("List application templates", "GET", URI::join(get_url, "application_templates")),
         "LIST_ESTIMATES" => Link.new("List available estimates", "GET" , URI::join(get_url, "estimates"))
       }
-      links.merge!(if base_url = Rails.application.config.openshift[:community_quickstarts_url]
+      
+      base_url = Rails.application.config.openshift[:community_quickstarts_url]
+      if base_url.nil?
+        quickstart_links = {
+          "LIST_QUICKSTARTS"   => Link.new("List quickstarts", "GET", URI::join(get_url, "quickstarts")),
+          "SHOW_QUICKSTART"    => Link.new("Retrieve quickstart with :id", "GET", URI::join(get_url, "quickstarts/:id"), [
+            Param.new(":id", "string", "Unique identifier of the quickstart", nil, [])
+          ]),
+        }
+        links.merge! quickstart_links
+      else
         base_url = URI.join(get_url, base_url).to_s
-        {
+        quickstart_links = {
           "LIST_QUICKSTARTS"   => Link.new("List quickstarts", "GET", URI::join(base_url, "v1/quickstarts/promoted.json")),
           "SHOW_QUICKSTART"    => Link.new("Retrieve quickstart with :id", "GET", URI::join(base_url, "v1/quickstarts/:id"), [
             Param.new(":id", "string", "Unique identifier of the quickstart", nil, [])
@@ -46,15 +56,12 @@ class BaseController < ActionController::Base
             Param.new("search", "string", "The search term to use for the quickstart", nil, [])
           ]),
         }
-      else
-        {
-          "LIST_QUICKSTARTS"   => Link.new("List quickstarts", "GET", URI::join(get_url, "quickstarts")),
-          "SHOW_QUICKSTART"    => Link.new("Retrieve quickstart with :id", "GET", URI::join(get_url, "quickstarts/:id"), [
-            Param.new(":id", "string", "Unique identifier of the quickstart", nil, [])
-          ]),
-        }
-      end)
+        links.merge! quickstart_links
+      end
     end
+    
+    @reply = RestReply.new(:ok, "links", links)
+    respond_with @reply, :status => @reply.status
   end
   
   protected

@@ -59,6 +59,8 @@ class Application
   embeds_many :group_instances, class_name: GroupInstance.name
   embeds_many :app_ssh_keys, class_name: ApplicationSshKey.name
   embeds_many :usage_records, class_name: UsageRecord.name
+  
+  attr_accessor :user_agent
 
   validates :name,
     presence: {message: "Application name is required and cannot be blank."},
@@ -95,7 +97,7 @@ class Application
       app
     else
       app.delete
-      raise StickShift::ApplicationValidationException.new(app)
+      raise OpenShift::ApplicationValidationException.new(app)
     end
   end
   
@@ -402,7 +404,7 @@ class Application
 
   # Returns the fully qualified domain name where the application can be accessed
   def fqdn
-    "#{self.name}-#{self.domain.namespace}.#{Rails.configuration.ss[:domain_suffix]}"
+    "#{self.name}-#{self.domain.namespace}.#{Rails.configuration.openshift[:domain_suffix]}"
   end
 
   # Returns the ssh URL to access the gear hosting the web_proxy component
@@ -586,14 +588,14 @@ class Application
   # {PendingAppOps} object which tracks the progess of the operation.
   #
   # == Raises:
-  # StickShift::UserException if the alias is already been associated with an application.
+  # OpenShift::UserException if the alias is already been associated with an application.
   def add_alias(fqdn)
-    if !(fqdn =~ /\A[\w\-\.]+\z/) or (fqdn =~ /#{Rails.configuration.ss[:domain_suffix]}$/)
-      raise StickShift::UserException.new("Invalid Server Alias '#{fqdn}' specified", 105) 
+    if !(fqdn =~ /\A[\w\-\.]+\z/) or (fqdn =~ /#{Rails.configuration.openshift[:domain_suffix]}$/)
+      raise OpenShift::UserException.new("Invalid Server Alias '#{fqdn}' specified", 105) 
     end
     
     Application.run_in_application_lock(self) do
-      raise StickShift::UserException.new("Alias #{fqdn} is already registered") if Application.where(aliases: fqdn).count > 0
+      raise OpenShift::UserException.new("Alias #{fqdn} is already registered") if Application.where(aliases: fqdn).count > 0
       aliases.push(fqdn)
       op_group = PendingAppOpGroup.new(op_type: :add_alias, args: {"fqdn" => fqdn})
       self.pending_op_groups.push op_group
@@ -725,7 +727,7 @@ class Application
       when "ENV_VAR_REMOVE"
         env_vars_to_rm.push({"key" => command_item[:args][0]})
       when "BROKER_KEY_ADD"
-        iv, token = StickShift::AuthService.instance.generate_broker_key(self)
+        iv, token = OpenShift::AuthService.instance.generate_broker_key(self)
         pending_op = PendingAppOpGroup.new(op_type: :add_broker_auth_key, args: { "iv" => iv, "token" => token })
         Application.where(_id: self._id).update_all({ "$push" => { pending_op_groups: pending_op.serializable_hash } })
       when "BROKER_KEY_REMOVE"
@@ -1402,7 +1404,7 @@ class Application
       end
       owner.reload
       if owner.consumed_gears + num_gears_added > owner.capabilities["max_gears"]
-        raise StickShift::GearLimitReachedException.new("#{owner.login} is currently using #{owner.consumed_gears} out of #{owner.capabilities["max_gears"]} limit and this application requires #{num_gears} additional gears.")
+        raise OpenShift::GearLimitReachedException.new("#{owner.login} is currently using #{owner.consumed_gears} out of #{owner.capabilities["max_gears"]} limit and this application requires #{num_gears} additional gears.")
       end
       owner.consumed_gears += num_gears_added
       op_group.pending_ops.push ops
@@ -1534,14 +1536,14 @@ class Application
         
         if g_comp_spec.has_key?("min_gears") 
           if g_comp_spec["min_gears"] < scale[:min]
-            raise StickShift::ScaleConflictException.new(scale[:min_cart], scale[:min_comp], g_comp_spec["min_gears"], nil, scale[:cart_min], nil)
+            raise OpenShift::ScaleConflictException.new(scale[:min_cart], scale[:min_comp], g_comp_spec["min_gears"], nil, scale[:cart_min], nil)
           end
           scale[:min] = g_comp_spec["min_gears"] if g_comp_spec["min_gears"] > scale[:min]
         end
         
         if  g_comp_spec.has_key?("max_gears") 
           if scale[:max] != -1 and g_comp_spec["max_gears"] > scale[:max]
-            raise StickShift::ScaleConflictException.new(scale[:min_cart], scale[:min_comp], nil, g_comp_spec["max_gears"], nil, scale[:cart_max])
+            raise OpenShift::ScaleConflictException.new(scale[:min_cart], scale[:min_comp], nil, g_comp_spec["max_gears"], nil, scale[:cart_max])
           end
           scale[:max] = g_comp_spec["max_gears"] if g_comp_spec["max_gears"] != -1 and (g_comp_spec["max_gears"] < scale[:max] or scale[:max] == -1)
         end
@@ -1584,7 +1586,7 @@ class Application
     #calculate initial list based on user provided dependencies
     features.each do |feature|
       cart = CartridgeCache.find_cartridge(feature)
-      raise StickShift::UnfulfilledRequirementException.new(feature) if cart.nil?
+      raise OpenShift::UnfulfilledRequirementException.new(feature) if cart.nil?
       prof = cart.profile_for_feature(feature)
       added_cartridges << cart
       profiles << {cartridge: cart, profile: prof}
@@ -1599,7 +1601,7 @@ class Application
           next if profiles.count{|d| d[:cartridge].features.include?(feature)} > 0
 
           cart = CartridgeCache.find_cartridge(feature)
-          raise StickShift::UnfulfilledRequirementException.new(feature) if cart.nil?
+          raise OpenShift::UnfulfilledRequirementException.new(feature) if cart.nil?
           prof = cart.profile_for_feature(feature)
           added_cartridges << cart
           profiles << {cartridge: cart, profile: prof}
@@ -1779,7 +1781,7 @@ class Application
 
   def get_components_for_feature(feature)
     cart = CartridgeCache.find_cartridge(feature)
-    raise StickShift::UserException.new("No cartridge found that provides #{feature}") if cart.nil?
+    raise OpenShift::UserException.new("No cartridge found that provides #{feature}") if cart.nil?
     prof = cart.profile_for_feature(feature)
     prof.components.map{ |comp| self.component_instances.find_by(cartridge_name: cart.name, component_name: comp.name) }
   end
@@ -1787,7 +1789,7 @@ class Application
   def track_usage(gear, event, usage_type=UsageRecord::USAGE_TYPES[:gear_usage])
     if Rails.configuration.usage_tracking[:datastore_enabled]
       now = Time.now.utc
-      uuid = StickShift::Model.gen_uuid
+      uuid = OpenShift::Model.gen_uuid
       self.usage_records = [] unless usage_records
       usage_record = UsageRecord.new(event, user, now, uuid, usage_type)
       case usage_type

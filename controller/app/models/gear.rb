@@ -44,7 +44,7 @@ class Gear
   end
   
   def reserve_uid
-    @container = StickShift::ApplicationContainerProxy.find_available(group_instance.gear_size)
+    @container = OpenShift::ApplicationContainerProxy.find_available(group_instance.gear_size)
     self.set :server_identity, @container.id
     self.set :uid, @container.reserve_uid
   end
@@ -64,7 +64,7 @@ class Gear
   end
   
   def register_dns
-    dns = StickShift::DnsService.instance
+    dns = OpenShift::DnsService.instance
     begin
       dns.register_application(self.name, self.group_instance.application.domain.namespace, public_hostname)
       dns.publish
@@ -74,7 +74,7 @@ class Gear
   end
   
   def deregister_dns
-    dns = StickShift::DnsService.instance
+    dns = OpenShift::DnsService.instance
     begin
       dns.deregister_application(self.name, self.group_instance.application.domain.namespace)
       dns.publish
@@ -92,12 +92,12 @@ class Gear
   # A {ResultIO} object with with output or error messages from the Node.
   # Exit codes:
   #   success = 0
-  # @raise [StickShift::NodeException] on failure
+  # @raise [OpenShift::NodeException] on failure
   def add_component(component, init_git_url=nil)
     result_io = get_proxy.configure_cartridge(app, self, component.cartridge_name, init_git_url)
     component.process_properties(result_io)
     app.process_commands(result_io)
-    raise StickShift::NodeException.new("Unable to add component #{component.cartridge_name}::#{component.component_name}", result_io.exitcode, result_io) if result_io.exitcode != 0
+    raise OpenShift::NodeException.new("Unable to add component #{component.cartridge_name}::#{component.component_name}", result_io.exitcode, result_io) if result_io.exitcode != 0
     result_io
   end
   
@@ -110,21 +110,21 @@ class Gear
   # A {ResultIO} object with with output or error messages from the Node.
   # Exit codes:
   #   success = 0
-  # @raise [StickShift::NodeException] on failure
+  # @raise [OpenShift::NodeException] on failure
   def remove_component(component)
     result_io = get_proxy.deconfigure_cartridge(app, self, component.cartridge_name)
     app.process_commands(result_io)
     result_io
   end
   
-  # Used for identify methods like start/stop etc. which can be handled transparently by an {StickShift::ApplicationContainerProxy}
+  # Used for identify methods like start/stop etc. which can be handled transparently by an {OpenShift::ApplicationContainerProxy}
   # @see Object::respond_to?
   # @see http://ruby-doc.org/core-1.9.3/Object.html#method-i-respond_to-3F
   def respond_to?(sym, include_private=false)
     get_proxy.respond_to?(sym, include_private) || super
   end
   
-  # Used for handle methods like start/stop etc. which can be handled transparently by an {StickShift::ApplicationContainerProxy}
+  # Used for handle methods like start/stop etc. which can be handled transparently by an {OpenShift::ApplicationContainerProxy}
   # @see BasicObject::method_missing
   # @see http://www.ruby-doc.org/core-1.9.3/BasicObject.html
   def method_missing(sym, *args, &block)
@@ -167,13 +167,13 @@ class Gear
     gear_states
   end
 
-  # Retrieves the instance of {StickShift::ApplicationContainerProxy} that backs this gear
+  # Retrieves the instance of {OpenShift::ApplicationContainerProxy} that backs this gear
   #
   # == Returns:
-  # {StickShift::ApplicationContainerProxy}
+  # {OpenShift::ApplicationContainerProxy}
   def get_proxy
     if @container.nil? and !self.server_identity.nil?
-      @container = StickShift::ApplicationContainerProxy.instance(self.server_identity)
+      @container = OpenShift::ApplicationContainerProxy.instance(self.server_identity)
     end    
     return @container
   end
@@ -214,7 +214,7 @@ class Gear
     new_ns = args["new_namespace"]
     cart = args["cartridge"]
 
-    dns = StickShift::DnsService.instance
+    dns = OpenShift::DnsService.instance
     begin
       dns.deregister_application(self.name, old_ns, public_hostname)
       dns.register_application(self.name, new_ns, public_hostname)

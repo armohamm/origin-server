@@ -1,7 +1,6 @@
 class KeysController < BaseController
   respond_to :xml, :json
   before_filter :authenticate, :check_version
-  include LegacyBrokerHelper
 
   #GET /user/keys
   def index
@@ -13,6 +12,7 @@ class KeysController < BaseController
       end
     end
     render_success(:ok, "keys", ssh_keys, "LIST_KEYS", "Found #{ssh_keys.length} ssh keys")
+  end
 
   #GET /user/keys/<id>
   def show

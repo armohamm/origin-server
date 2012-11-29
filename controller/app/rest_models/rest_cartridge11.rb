@@ -1,9 +1,10 @@
 class RestCartridge11 < OpenShift::Model
-  attr_accessor :type, :name, :version, :license, :license_url, :tags, :website, :suggests, :requires, :conflicts, :provides,
-    :help_topics, :links, :properties, :display_name, :description, :scales_from, 
-    :scales_to, :current_scale, :supported_scales_from, :supported_scales_to, 
+  attr_accessor :type, :name, :version, :license, :license_url, :tags, :website, 
+    :help_topics, :links, :properties, :display_name, :description, :scales_from,
+    :scales_to, :current_scale, :supported_scales_from, :supported_scales_to,
     :scales_with, :base_gear_storage, :additional_gear_storage, :gear_profile, :collocated_with, 
     :status_messages
+                   
 
   def initialize(cart, comp, app, cinst, colocated_cinsts, scale, url, status_messages, nolinks=false)
     self.name = cart.name
@@ -15,9 +16,6 @@ class RestCartridge11 < OpenShift::Model
     self.license_url = cart.license_url
     self.tags = cart.categories
     self.website = cart.website
-    self.suggests = cart.suggests
-    self.requires = cart.requires
-    self.conflicts = cart.conflicts
     self.type = "standalone"
     self.type = "embedded" if cart.categories.include? "embedded"
 
@@ -40,9 +38,9 @@ class RestCartridge11 < OpenShift::Model
     
     self.properties = []
     if app.nil?
-      self.provides = cart.features
+      #self.provides = cart.features
     else
-      self.provides = app.get_feature(cinst.cartridge_name, cinst.component_name)
+      #self.provides = app.get_feature(cinst.cartridge_name, cinst.component_name)
       prop_values = cinst.component_properties
       cart.cart_data_def.each do |data_def|
         property = {}

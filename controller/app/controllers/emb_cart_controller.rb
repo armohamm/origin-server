@@ -115,7 +115,7 @@ class EmbCartController < BaseController
       component_instance = application.component_instances.find_by(cartridge_name: cart.name, component_name: comp.name)
       cartridge = get_rest_cartridge(application, component_instance, application.group_instances_with_scale, application.group_overrides)
       return render_success(:created, "cartridge", cartridge, "EMBED_CARTRIDGE", nil, nil, nil, nil)
-    rescue StickShift::UserException => e
+    rescue OpenShift::UserException => e
       return render_error(:bad_request, "Invalid cartridge. #{e.message}", 109, "EMBED_CARTRIDGE", "cartridge")
     end
   end
@@ -142,7 +142,7 @@ class EmbCartController < BaseController
       comp = application.component_instances.find_by(cartridge_name: cartridge)
       feature = application.get_feature(comp.cartridge_name, comp.component_name)
       if CartridgeCache.find_cartridge(cartridge).categories.include?("web_framework")
-        raise StickShift::UserException.new("Invalid cartridge #{id}")
+        raise OpenShift::UserException.new("Invalid cartridge #{id}")
       end
       
       application.remove_features([feature])
@@ -154,7 +154,7 @@ class EmbCartController < BaseController
       end
       
       render_success(:ok, "application", app, "REMOVE_CARTRIDGE", "Removed #{cartridge} from application #{id}", true)
-    rescue StickShift::UserException => e
+    rescue OpenShift::UserException => e
       return render_error(:bad_request, "Application is currently busy performing another operation. Please try again in a minute.", 129, "REMOVE_CARTRIDGE")
     rescue Mongoid::Errors::DocumentNotFound
       return render_error(:bad_request, "Cartridge #{cartridge} not embedded within application #{id}", 129, "REMOVE_CARTRIDGE")

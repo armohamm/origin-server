@@ -81,7 +81,7 @@ class GroupInstance
       result_io.resultIO << output
       result_io.exitcode = status
       if status != 0
-        raise StickShift::NodeException.new("Error applying settings to gear: #{gear} with status: #{status} and output: #{output}", 143, result_io)
+        raise OpenShift::NodeException.new("Error applying settings to gear: #{gear} with status: #{status} and output: #{output}", 143, result_io)
       end
     end
     result_io
@@ -132,7 +132,7 @@ class GroupInstance
         Rails.logger.error e.inspect
         Rails.logger.error e.backtrace.inspect
         failed_runs.push({:gear => gear, :exception => e})
-        if (!result_io.nil? && e.kind_of?(StickShift::SSException) && !e.resultIO.nil?)
+        if (!result_io.nil? && e.kind_of?(OpenShift::OOException) && !e.resultIO.nil?)
           result_io.append(e.resultIO)
         end
         if fail_fast

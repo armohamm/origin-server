@@ -17,7 +17,7 @@ class District
   def self.create_district(name, gear_size=nil)
     profile = gear_size ? gear_size : "small"
     if District.where(name: name).count > 0
-      raise StickShift::SSException.new("District by name #{name} already exists")
+      raise OpenShift::OOException.new("District by name #{name} already exists")
     end
     dist = District.new(name: name, gear_size: profile)
   end
@@ -46,7 +46,7 @@ class District
 
   def delete()
     if not server_identities.empty?
-      raise StickShift::SSException.new("Couldn't destroy district '#{name}' because it still contains nodes")
+      raise OpenShift::OOException.new("Couldn't destroy district '#{name}' because it still contains nodes")
     end
     super
   end
@@ -55,31 +55,31 @@ class District
     if server_identity
       found = District.in("server_identities.name" => [server_identity]).exists?
       unless found
-        container = StickShift::ApplicationContainerProxy.instance(server_identity)
+        container = OpenShift::ApplicationContainerProxy.instance(server_identity)
         begin
           capacity = container.get_capacity
           if capacity == 0
             container_node_profile = container.get_node_profile
             if container_node_profile == gear_size
               container.set_district("#{_id}", true)
-              # StickShift::DataStore.instance.add_district_node(@uuid, server_identity)
+              # OpenShift::DataStore.instance.add_district_node(@uuid, server_identity)
               self.active_server_identities_size += 1
               self.server_identities << { "name" => server_identity, "active" => true}
               self.save
             else
-              raise StickShift::SSException.new("Node with server identity: #{server_identity} is of node profile '#{container_node_profile}' and needs to be '#{gear_size}' to add to district '#{name}'")  
+              raise OpenShift::OOException.new("Node with server identity: #{server_identity} is of node profile '#{container_node_profile}' and needs to be '#{gear_size}' to add to district '#{name}'")  
             end
           else
-            raise StickShift::SSException.new("Node with server identity: #{server_identity} already has apps on it")
+            raise OpenShift::OOException.new("Node with server identity: #{server_identity} already has apps on it")
           end
-        rescue StickShift::NodeException => e
-          raise StickShift::SSException.new("Node with server identity: #{server_identity} could not be found")
+        rescue OpenShift::NodeException => e
+          raise OpenShift::OOException.new("Node with server identity: #{server_identity} could not be found")
         end
       else
-        raise StickShift::SSException.new("Node with server identity: #{server_identity} already belongs to another district: #{found._id}")
+        raise OpenShift::OOException.new("Node with server identity: #{server_identity} already belongs to another district: #{found._id}")
       end
     else
-      raise StickShift::UserException.new("server_identity is required")
+      raise OpenShift::UserException.new("server_identity is required")
     end
   end
 
@@ -93,22 +93,22 @@ class District
     server_map = server_identities_hash
     if server_map.has_key?(server_identity)
       unless server_map[server_identity]["active"]
-        container = StickShift::ApplicationContainerProxy.instance(server_identity)
+        container = OpenShift::ApplicationContainerProxy.instance(server_identity)
         capacity = container.get_capacity
         if capacity == 0
           container.set_district('NONE', false)
           server_identities.delete({ "name" => server_identity, "active" => false} )
           if not self.save
-            raise StickShift::SSException.new("Node with server identity: #{server_identity} could not be removed from district: #{_id}")
+            raise OpenShift::OOException.new("Node with server identity: #{server_identity} could not be removed from district: #{_id}")
           end
         else
-          raise StickShift::SSException.new("Node with server identity: #{server_identity} could not be removed from district: #{_id} because it still has apps on it")
+          raise OpenShift::OOException.new("Node with server identity: #{server_identity} could not be removed from district: #{_id} because it still has apps on it")
         end
       else
-        raise StickShift::SSException.new("Node with server identity: #{server_identity} from district: #{_id} must be deactivated before it can be removed")
+        raise OpenShift::OOException.new("Node with server identity: #{server_identity} from district: #{_id} must be deactivated before it can be removed")
       end
     else
-      raise StickShift::SSException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
+      raise OpenShift::OOException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
     end
   end
   
@@ -118,13 +118,13 @@ class District
       if server_map[server_identity]["active"]
         District.where("_id" => self._id, "server_identities.name" => server_identity ).find_and_modify({ "$set" => { "server_identities.$.active" => false }, "$inc" => { "active_server_identities_size" => -1 } }, new: true)
         self.reload
-        container = StickShift::ApplicationContainerProxy.instance(server_identity)
+        container = OpenShift::ApplicationContainerProxy.instance(server_identity)
         container.set_district("#{_id}", false)
       else
-        raise StickShift::SSException.new("Node with server identity: #{server_identity} is already deactivated")
+        raise OpenShift::OOException.new("Node with server identity: #{server_identity} is already deactivated")
       end
     else
-      raise StickShift::SSException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
+      raise OpenShift::OOException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
     end
   end
   
@@ -134,13 +134,13 @@ class District
       unless server_map[server_identity]["active"]
         District.where("_id" => self._id, "server_identities.name" => server_identity ).find_and_modify({ "$set" => { "server_identities.$.active" => true}, "$inc" => { "active_server_identities_size" => 1 } }, new: true)
         self.reload
-        container = StickShift::ApplicationContainerProxy.instance(server_identity)
+        container = OpenShift::ApplicationContainerProxy.instance(server_identity)
         container.set_district("#{_id}", true)
       else
-        raise StickShift::SSException.new("Node with server identity: #{server_identity} is already active")
+        raise OpenShift::OOException.new("Node with server identity: #{server_identity} is already active")
       end
     else
-      raise StickShift::SSException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
+      raise OpenShift::OOException.new("Node with server identity: #{server_identity} doesn't belong to district: #{_id}")
     end
   end
 
@@ -163,7 +163,7 @@ class District
       @available_uids += additions
       self.save
     else
-      raise StickShift::SSException.new("You must supply a positive number of uids to remove")
+      raise OpenShift::OOException.new("You must supply a positive number of uids to remove")
     end
   end
   
@@ -178,23 +178,23 @@ class District
           found_first_pos = true
         elsif found_first_pos
           unless available_uid == subtractions[pos]
-            raise StickShift::SSException.new("Uid: #{subtractions[pos]} not found in order in available_uids.  Can not continue!")
+            raise OpenShift::OOException.new("Uid: #{subtractions[pos]} not found in order in available_uids.  Can not continue!")
           end
         end
         pos += 1 if found_first_pos
         break if pos == subtractions.length
       end
       if !found_first_pos
-        raise StickShift::SSException.new("Missing uid: #{subtractions[0]} in existing available_uids.  Can not continue!")
+        raise OpenShift::OOException.new("Missing uid: #{subtractions[0]} in existing available_uids.  Can not continue!")
       end
-      # StickShift::DataStore.instance.remove_district_uids(uuid, subtractions)
+      # OpenShift::DataStore.instance.remove_district_uids(uuid, subtractions)
       @available_capacity -= num_uids
       @max_uid -= num_uids
       @max_capacity -= num_uids
       @available_uids -= subtractions
       self.save
     else
-      raise StickShift::SSException.new("You must supply a positive number of uids to remove")
+      raise OpenShift::OOException.new("You must supply a positive number of uids to remove")
     end
   end
 

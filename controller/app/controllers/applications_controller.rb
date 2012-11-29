@@ -70,7 +70,7 @@ class ApplicationsController < BaseController
         descriptor_hash["Name"] = app_name
         application = Application.from_template(domain, descriptor_hash, template.git_url)
       end
-    rescue StickShift::UnfulfilledRequirementException => e
+    rescue OpenShift::UnfulfilledRequirementException => e
       return render_error(:unprocessable_entity, "Unable to create application for #{e.feature}", 109, "ADD_APPLICATION", "cartridge")
     rescue ApplicationValidationException => e
       messages = get_error_messages(e.app)
@@ -78,10 +78,9 @@ class ApplicationsController < BaseController
     end
     application.set(:user_agent, request.headers['User-Agent'])
     
-    current_ip = application.get_public_ip_address
+    current_ip = "TODO" #application.group_instances.first.gears.first.get_public_ip_address
     app = get_rest_application(application)
     reply = RestReply.new(:created, "application", app)
-    
   
     messages = []
     log_msg = "Application #{application.name} was created."
@@ -119,10 +118,11 @@ class ApplicationsController < BaseController
   def get_rest_application(application)
     if $requested_api_version == 1.0
       app = RestApplication10.new(application, get_url, nolinks)
-    elsif $requested_api_version < 1.3
-      app = RestApplication12.new(application, get_url, nolinks)
+#    elsif $requested_api_version < 1.2
     else
-      app = RestApplication13.new(application, get_url, nolinks)
+      app = RestApplication12.new(application, get_url, nolinks)
+#    else
+#      app = RestApplication13.new(application, get_url, nolinks)
     end
     app
   end
