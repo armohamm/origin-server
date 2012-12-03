@@ -217,7 +217,7 @@ class EmbCartController < BaseController
     group_instance = group_instances_with_scale.select{ |go| go.all_component_instances.include? component_instance }[0]
     group_component_instances = group_instance.all_component_instances
     colocated_instances = group_component_instances - [component_instance]
-    messages = application.status(component_instance).to_s if include_status_messages
+    messages = application.component_status(component_instance) if include_status_messages
           
     additional_storage = 0
     group_override = group_overrides.select{ |go| go["components"] == [component_instance.to_hash] }.first
