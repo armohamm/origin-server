@@ -1,4 +1,4 @@
-class RestCartridge11 < OpenShift::Model
+class RestCartridge < OpenShift::Model
   attr_accessor :type, :name, :version, :license, :license_url, :tags, :website, 
     :help_topics, :links, :properties, :display_name, :description, :scales_from,
     :scales_to, :current_scale, :supported_scales_from, :supported_scales_to,

@@ -146,11 +146,8 @@ class ApplicationsController < BaseController
   def get_rest_application(application)
     if $requested_api_version == 1.0
       app = RestApplication10.new(application, get_url, nolinks)
-#    elsif $requested_api_version < 1.2
     else
-      app = RestApplication12.new(application, get_url, nolinks)
-#    else
-#      app = RestApplication13.new(application, get_url, nolinks)
+      app = RestApplication.new(application, get_url, nolinks)
     end
     app
   end
