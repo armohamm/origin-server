@@ -898,7 +898,6 @@ class Application
       end
       raise e_orig
     end
-    ops
   end
   
   def self.run_in_application_lock(application, &block)
