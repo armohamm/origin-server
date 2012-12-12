@@ -59,9 +59,11 @@ class AppEventsController < BaseController
         when "add-alias"
           application.add_alias(server_alias)
           msg = "Application #{id} has added alias"
+          msg += ": #{r.resultIO.string.chomp}" if !r.resultIO.string.empty?
         when "remove-alias"
-          application.remove_alias(server_alias)
+          r = application.remove_alias(server_alias)
           msg = "Application #{id} has removed alias"
+          msg += ": #{r.resultIO.string.chomp}" if !r.resultIO.string.empty?
         when "scale-up"
           web_framework_component_instance = application.component_instances.select{ |c| CartridgeCache.find_cartridge(c.cartridge_name).categories.include?("web_framework") }.first
           application.scale_by(web_framework_component_instance.group_instance_id, 1)

@@ -1,7 +1,7 @@
 class ApplicationsController < BaseController
   respond_to :xml, :json
   before_filter :authenticate, :check_version
-  
+  include RestModelHelper
   # GET /domains/[domain id]/applications
   def index
     domain_id = params[:domain_id]
@@ -12,7 +12,8 @@ class ApplicationsController < BaseController
       return render_error(:not_found, "Domain '#{domain_id}' not found", 127, "LIST_APPLICATIONS")
     end
 
-    apps = domain.applications.map! { |application| get_rest_application(application) }
+    include_cartridges = (params[:include] == "cartridges")
+    apps = domain.applications.map! { |application| get_rest_application(application, include_cartridges) }
     render_success(:ok, "applications", apps, "LIST_APPLICATIONS", "Found #{apps.length} applications for domain '#{domain_id}'")
   end
   
@@ -30,9 +31,11 @@ class ApplicationsController < BaseController
     
     begin
       application = Application.find_by(domain: domain, name: id)
+      include_cartridges = (params[:include] == "cartridges")
+      
       @application_name = application.name
       @application_uuid = application._id.to_s
-      render_success(:ok, "application", get_rest_application(application), "SHOW_APPLICATION", "Application '#{id}' found")
+      render_success(:ok, "application", get_rest_application(application, include_cartridges), "SHOW_APPLICATION", "Application '#{id}' found")
     rescue Mongoid::Errors::DocumentNotFound
       return render_error(:not_found, "Application '#{id}' not found", 101, "SHOW_APPLICATION")
     end
@@ -104,13 +107,16 @@ class ApplicationsController < BaseController
     application.user_agent= request.headers['User-Agent']
     
     current_ip = "TODO" #application.group_instances.first.gears.first.get_public_ip_address
-    app = get_rest_application(application)
+    include_cartridges = (params[:include] == "cartridges")
+    
+    app = get_rest_application(application, include_cartridges)
     reply = RestReply.new(:created, "application", app)
   
     messages = []
     log_msg = "Application #{application.name} was created."
     messages.push(Message.new(:info, log_msg))
     messages.push(Message.new(:info, "#{current_ip}", 0, "current_ip")) unless !current_ip or current_ip.empty?
+
     #messages.push(Message.new(:info, app_configure_reply.resultIO.string, 0, :result)) if app_configure_reply
     render_success(:created, "application", app, "ADD_APPLICATION", log_msg, nil, nil, messages)
   end
@@ -139,16 +145,5 @@ class ApplicationsController < BaseController
     # create tasks to delete gear groups
     application.destroy_app
     render_success(:no_content, nil, nil, "DELETE_APPLICATION", "Application #{id} is deleted.", true) 
-  end
-  
-  private
-  
-  def get_rest_application(application)
-    if $requested_api_version == 1.0
-      app = RestApplication10.new(application, get_url, nolinks)
-    else
-      app = RestApplication.new(application, get_url, nolinks)
-    end
-    app
   end
 end

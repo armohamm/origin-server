@@ -22,6 +22,10 @@ module MCollective
         reply[:msg] = request[:msg]
       end
 
+      def cleanpwd(arg)
+        arg.gsub(/(passwo?r?d\s*[:=]+\s*)\S+/i, '\\1[HIDDEN]').gsub(/(usern?a?m?e?\s*[:=]+\s*)\S+/i,'\\1[HIDDEN]')
+      end
+
       def oo_app_create(cmd, args)
         Log.instance.info "COMMAND: #{cmd}"
 
@@ -303,6 +307,10 @@ module MCollective
         begin
           frontend = OpenShift::FrontendHttpServer.new(container_uuid, container_name, namespace)
           out, err, rc = frontend.add_alias(alias_name)
+        rescue OpenShift::FrontendHttpServerException => e
+          Log.instance.info e.message
+          Log.instance.info e.backtrace
+          return 129, e.message
         rescue Exception => e
           Log.instance.info e.message
           Log.instance.info e.backtrace
@@ -326,6 +334,10 @@ module MCollective
         begin
           frontend = OpenShift::FrontendHttpServer.new(container_uuid, container_name, namespace)
           out, err, rc = frontend.remove_alias(alias_name)
+        rescue OpenShift::FrontendHttpServerException => e
+          Log.instance.info e.message
+          Log.instance.info e.backtrace
+          return 129, e.message
         rescue Exception => e
           Log.instance.info e.message
           Log.instance.info e.backtrace
@@ -431,9 +443,9 @@ module MCollective
         end
 
         if exitcode == 0
-          Log.instance.info("(#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("(#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
         else
-          Log.instance.info("ERROR: (#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("ERROR: (#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
         end
         return exitcode, output
       end
@@ -490,9 +502,9 @@ module MCollective
         reply[:exitcode] = exitcode
         reply[:output] = output
         if exitcode == 0
-          Log.instance.info("cartridge_do_action (#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("cartridge_do_action (#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
         else
-          Log.instance.info("cartridge_do_action failed (#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("cartridge_do_action failed (#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
           reply.fail! "cartridge_do_action failed #{exitcode}. Output #{output}"
         end
       end
@@ -736,9 +748,9 @@ module MCollective
         end
 
         if exitcode == 0
-          Log.instance.info("cartridge_do_action (#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("cartridge_do_action (#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
         else
-          Log.instance.info("cartridge_do_action ERROR (#{exitcode})\n------\n#{output}\n------)")
+          Log.instance.info("cartridge_do_action ERROR (#{exitcode})\n------\n#{cleanpwd(output)}\n------)")
         end
 
         parallel_job[:result_stdout] = output

@@ -1,6 +1,6 @@
 Summary:        Utility scripts for the OpenShift Origin broker
 Name:           openshift-origin-broker-util
-Version: 1.2.2
+Version: 1.2.5
 Release:        1%{?dist}
 Group:          Network/Daemons
 License:        ASL 2.0
@@ -51,6 +51,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0755,-,-) %{_sbindir}/oo-setup-bind
 %attr(0755,-,-) %{_sbindir}/oo-setup-broker
 %attr(0755,-,-) %{_sbindir}/oo-accept-broker
+%attr(0755,-,-) %{_sbindir}/oo-accept-systems
 /usr/share/openshift/kickstarts/openshift-origin-remix.ks
 
 %doc LICENSE
@@ -65,8 +66,29 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man8/oo-setup-bind.8.gz
 %{_mandir}/man8/oo-setup-broker.8.gz
 %{_mandir}/man8/oo-accept-broker.8.gz
+%{_mandir}/man8/oo-accept-systems.8.gz
 
 %changelog
+* Tue Dec 11 2012 Adam Miller <admiller@redhat.com> 1.2.5-1
+- Merge pull request #1045 from kraman/f17_fixes (openshift+bot@redhat.com)
+- Switched console port from 3128 to 8118 due to selinux changes in F17-18
+  Fixed openshift-node-web-proxy systemd script Updates to oo-setup-broker
+  script:   - Fixes hardcoded example.com   - Added basic auth based console
+  setup   - added openshift-node-web-proxy setup Updated console build and spec
+  to work on F17 (kraman@gmail.com)
+
+* Mon Dec 10 2012 Adam Miller <admiller@redhat.com> 1.2.4-1
+- Merge pull request #1007 from sosiouxme/US3036-origin
+  (openshift+bot@redhat.com)
+- Adding oo-accept-systems script for verifying all node hosts from the broker.
+  - also verifies cartridge consistency and checks for stale cartridge cache.
+  oo-accept-node sanity checks public_ip and public_hostname. Minor edits to
+  make node.conf easier to understand. (lmeyer@redhat.com)
+
+* Fri Dec 07 2012 Adam Miller <admiller@redhat.com> 1.2.3-1
+- Removing references to complete-origin-setup from the man pages
+  (bleanhar@redhat.com)
+
 * Thu Nov 29 2012 Adam Miller <admiller@redhat.com> 1.2.2-1
 - Merge pull request #507 from mscherer/remove_hardcoded_tmp
   (openshift+bot@redhat.com)

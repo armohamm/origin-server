@@ -4,6 +4,7 @@ class LegacyBrokerController < BaseController
   before_filter :authenticate, :except => :cart_list_post
   rescue_from Exception, :with => :exception_handler
   include UserActionLogger
+  include CartridgeHelper
   
   # Initialize domain/app variables to be used for logging in user_action.log
   # The values will be set in the controllers handling the requests
@@ -189,7 +190,7 @@ class LegacyBrokerController < BaseController
       raise OpenShift::UserException.new("Domain already exists for user. Update the domain to modify.", 158) if !@cloud_user.domains.empty?
       raise OpenShift::UserException.new("The supplied namespace '#{@req.namespace}' is already in use. Please choose another", 106) if Domain.where(namespace: @req.namespace).count > 0
 
-      key = SshKey.new(name: CloudUser::DEFAULT_SSH_KEY_NAME, type: @req.key_type, content: @req.ssh)
+      key = UserSshKey.new(name: CloudUser::DEFAULT_SSH_KEY_NAME, type: @req.key_type, content: @req.ssh)
       if key.invalid?
          log_action(@request_id, @cloud_user._id.to_s, @login, "LEGACY_CREATE_DOMAIN", true, "Failed to create domain #{@req.namespace}: #{key.errors.first[1][:message]}", get_extra_log_args)
          @reply.resultIO << key.errors.first[1][:message]

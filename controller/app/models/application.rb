@@ -52,6 +52,7 @@ class Application
   field :component_configure_order, type: Array, default: []
   field :default_gear_size, type: String, default: "small"
   field :scalable, type: Boolean, default: false
+  field :init_git_url, type: String, default: ""
   embeds_many :connections, class_name: ConnectionInstance.name
   embeds_many :component_instances, class_name: ComponentInstance.name
   embeds_many :group_instances, class_name: GroupInstance.name
@@ -82,7 +83,7 @@ class Application
   end
 
   def self.create_app(application_name, features, domain, default_gear_size = GEAR_SIZES[0], scalable=false, result_io=ResultIO.new, group_overrides=[], init_git_url=nil)
-    app = Application.new(domain: domain, name: application_name, default_gear_size: default_gear_size, scalable: scalable, app_ssh_keys: [], pending_op_groups: [])
+    app = Application.new(domain: domain, name: application_name, default_gear_size: default_gear_size, scalable: scalable, app_ssh_keys: [], pending_op_groups: [], init_git_url: init_git_url)
     features << "web_proxy" if scalable
     if app.valid?
       begin
@@ -586,14 +587,24 @@ class Application
   # == Raises:
   # OpenShift::UserException if the alias is already been associated with an application.
   def add_alias(fqdn)
-    if !(fqdn =~ /\A[\w\-\.]+\z/) or (fqdn =~ /#{Rails.configuration.openshift[:domain_suffix]}$/)
-      raise OpenShift::UserException.new("Invalid Server Alias '#{fqdn}' specified", 105) 
+    # Server aliases validate as DNS host names in accordance with RFC
+    # 1123 and RFC 952.  Additionally, OpenShift does not allow an
+    # Alias to be an IP address or a host in the service domain.
+    # Since DNS is case insensitive, all names are downcased for
+    # indexing/compares.
+    server_alias = fqdn.downcase
+    if !(server_alias =~ /\A[0-9a-zA-Z\-\.]+\z/) or
+        (server_alias =~ /#{Rails.configuration.openshift[:domain_suffix]}$/) or
+        (server_alias.length > 255 ) or
+        (server_alias.length == 0 ) or
+        (server_alias =~ /^\d+\.\d+\.\d+\.\d+$/)
+      raise OpenShift::UserException.new("Invalid Server Alias '#{server_alias}' specified", 105)
     end
     
     Application.run_in_application_lock(self) do
-      raise OpenShift::UserException.new("Alias #{fqdn} is already registered") if Application.where(aliases: fqdn).count > 0
-      aliases.push(fqdn)
-      op_group = PendingAppOpGroup.new(op_type: :add_alias, args: {"fqdn" => fqdn})
+      raise OpenShift::UserException.new("Alias #{server_alias} is already registered") if Application.where(aliases: server_alias).count > 0
+      aliases.push(server_alias)
+      op_group = PendingAppOpGroup.new(op_type: :add_alias, args: {"fqdn" => server_alias})
       self.pending_op_groups.push op_group
       result_io = ResultIO.new
       self.run_jobs(result_io)
@@ -610,6 +621,8 @@ class Application
   # == Returns:
   # {PendingAppOps} object which tracks the progess of the operation.
   def remove_alias(fqdn)
+    fqdn = fqdn.downcase
+    
     Application.run_in_application_lock(self) do
       return unless aliases.include? fqdn
       aliases.delete(fqdn)
@@ -866,7 +879,7 @@ class Application
           op_group.execute(result_io)
           unreserve_gears(op_group.num_gears_removed)
           op_group.delete
-          self.reload            
+          self.reload       
         end
       end
       true
@@ -885,6 +898,7 @@ class Application
       end
       raise e_orig
     end
+    ops
   end
   
   def self.run_in_application_lock(application, &block)

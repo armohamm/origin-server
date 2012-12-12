@@ -420,8 +420,8 @@ module OpenShift
  
       def tidy(app, gear, cart)
         args = Hash.new
-        args['--with-app-uuid'] = app.uuid
-        args['--with-container-uuid'] = gear.uuid
+        args['--with-app-uuid'] = app._id.to_s
+        args['--with-container-uuid'] = gear._id.to_s
         result = execute_direct(@@C_CONTROLLER, 'tidy', args)
         parse_result(result)
       end
@@ -1116,35 +1116,27 @@ module OpenShift
         else
           server_identity = app ? MCollectiveApplicationContainerProxy.find_app(app._id.to_s, app.name) : nil
           if server_identity && @id != server_identity
-            raise StickShift::InvalidNodeException.new("Node execution failure (invalid  node).  If the problem persists please contact Red Hat support.", 143, nil, server_identity)
+            raise OpenShift::InvalidNodeException.new("Node execution failure (invalid  node).  If the problem persists please contact Red Hat support.", 143, nil, server_identity)
           else
-            raise StickShift::NodeException.new("Node execution failure (error getting result from node).  If the problem persists please contact Red Hat support.", 143)
+            raise OpenShift::NodeException.new("Node execution failure (error getting result from node).  If the problem persists please contact Red Hat support.", 143)
           end
         end
+
         gear_id = gear.nil? ? nil : gear._id.to_s
         result.parse_output(output, gear_id)
+
+        # raise an exception in case of non-zero exit code from the node
+        if result.exitcode != 0
+          result.debugIO << "Command return code: " + result.exitcode.to_s
+          if result.hasUserActionableError
+            raise OpenShift::UserException.new(result.errorIO.string, result.exitcode, result)
+          else
+            raise OpenShift::NodeException.new("Node execution failure (invalid exit code from node).  If the problem persists please contact Red Hat support.", 143, result)
+          end
+        end
+        
         result
       end
-
-      #def parse_result(mcoll_reply, app=nil, command=nil)
-      #  mcoll_result = mcoll_reply[0]
-      #  output = nil
-      #  if (mcoll_result && (defined? mcoll_result.results) && !mcoll_result.results[:data].nil?)
-      #    output = mcoll_result.results[:data][:output]
-      #    exitcode = mcoll_result.results[:data][:exitcode]
-      #  else
-      #    server_identity = app ? MCollectiveApplicationContainerProxy.find_app(app._id.to_s, app.name) : nil
-      #    if server_identity && @id != server_identity
-      #      raise OpenShift::InvalidNodeException.new("Node execution failure (invalid  node).  If the problem persists please contact Red Hat support.", 143, nil, server_identity)
-      #    else
-      #      raise OpenShift::NodeException.new("Node execution failure (error getting result from node).  If the problem persists please contact Red Hat support.", 143)
-      #    end
-      #  end
-      #  
-      #  result = MCollectiveApplicationContainerProxy.sanitize_result(output)
-      #  result.exitcode = exitcode
-      #  result
-      #end
       
       #
       # Returns the server identity of the specified app
@@ -1203,54 +1195,52 @@ module OpenShift
       end
       
       def run_cartridge_command(framework, app, gear, command, arg=nil, allow_move=true)
+        resultIO = nil
 
         arguments = "'#{gear.name}' '#{app.domain.namespace}' '#{gear._id.to_s}'"
         arguments += " '#{arg}'" if arg
 
         result = execute_direct(framework, command, arguments)
+
         begin
-          resultIO = parse_result(result, app, gear, command)
-        rescue OpenShift::InvalidNodeException => e
-          if command != 'configure' && allow_move
-            @id = e.server_identity
-            Rails.logger.debug "DEBUG: Changing server identity of '#{gear.name}' from '#{gear.server_identity}' to '#{@id}'"
-            dns_service = OpenShift::DnsService.instance
-            dns_service.modify_application(gear.name, app.domain.namespace, get_public_hostname)
-            dns_service.publish
-            gear.server_identity = @id
-            app.save
-            #retry
-            result = execute_direct(framework, command, arguments)
-            resultIO = parse_result(result, app, gear, command)
-          else
-            raise
-          end
-        end
-        Rails.logger.debug "DEBUG: Cartridge command #{framework}::#{command} exitcode = #{resultIO.exitcode}" 
-        if resultIO.exitcode != 0
-          resultIO.debugIO << "Cartridge return code: " + resultIO.exitcode.to_s
           begin
-            raise OpenShift::NodeException.new("Node execution failure (invalid exit code from node).  If the problem persists please contact Red Hat support.", 143, resultIO)
-          rescue OpenShift::NodeException => e
-            if command == 'deconfigure'
-              if framework.start_with?('embedded/')
-                if has_embedded_app?(app._id.to_s, framework[9..-1])
-                  raise
-                else
-                  Rails.logger.debug "DEBUG: Component '#{framework}' in application '#{app.name}' not found on node '#{@id}'.  Continuing with deconfigure."
-                end
-              else
-                if has_app?(app._id.to_s, app.name)
-                  raise
-                else
-                  Rails.logger.debug "DEBUG: Application '#{app.name}' not found on node '#{@id}'.  Continuing with deconfigure."
-                end
-              end
+            resultIO = parse_result(result, app, gear, command)
+          rescue OpenShift::InvalidNodeException => e
+            if command != 'configure' && allow_move
+              @id = e.server_identity
+              Rails.logger.debug "DEBUG: Changing server identity of '#{gear.name}' from '#{gear.server_identity}' to '#{@id}'"
+              dns_service = OpenShift::DnsService.instance
+              dns_service.modify_application(gear.name, app.domain.namespace, get_public_hostname)
+              dns_service.publish
+              gear.server_identity = @id
+              app.save
+              #retry
+              result = execute_direct(framework, command, arguments)
+              resultIO = parse_result(result, app, gear, command)
             else
               raise
             end
           end
+	rescue OpenShift::NodeException => e
+          if command == 'deconfigure'
+            if framework.start_with?('embedded/')
+              if has_embedded_app?(app._id.to_s, framework[9..-1])
+                raise
+              else
+                Rails.logger.debug "DEBUG: Component '#{framework}' in application '#{app.name}' not found on node '#{@id}'.  Continuing with deconfigure."
+              end
+            else
+              if has_app?(app._id.to_s, app.name)
+                raise
+              else
+                Rails.logger.debug "DEBUG: Application '#{app.name}' not found on node '#{@id}'.  Continuing with deconfigure."
+              end
+            end
+          else
+            raise
+          end
         end
+
         resultIO
       end
       
@@ -1514,20 +1504,24 @@ module OpenShift
         active_gears_map
       end
 
-      def self.sanitize_result(output)
+      def self.sanitize_result(output, exitcode=0)
         result = ResultIO.new
+        result.exitcode = exitcode
  
         if output && !output.empty?
           output.each_line do |line|
-            if line =~ /^CLIENT_(MESSAGE|RESULT|DEBUG|ERROR): /
+            if line =~ /^CLIENT_(MESSAGE|RESULT|DEBUG|ERROR|INTERNAL_ERROR): /
               if line =~ /^CLIENT_MESSAGE: /
                 result.messageIO << line['CLIENT_MESSAGE: '.length..-1]
               elsif line =~ /^CLIENT_RESULT: /
                 result.resultIO << line['CLIENT_RESULT: '.length..-1]
               elsif line =~ /^CLIENT_DEBUG: /
                 result.debugIO << line['CLIENT_DEBUG: '.length..-1]
+              elsif line =~ /^CLIENT_INTERNAL_ERROR: /
+                result.errorIO << line['CLIENT_INTERNAL_ERROR: '.length..-1]
               else
                 result.errorIO << line['CLIENT_ERROR: '.length..-1]
+                result.hasUserActionableError = true
               end
             elsif line =~ /^CART_DATA: /
               result.data << line['CART_DATA: '.length..-1]
@@ -1600,10 +1594,10 @@ module OpenShift
                 exitcode = mcoll_reply.results[:data][:exitcode]
                 sender = mcoll_reply.results[:sender]
                 Rails.logger.debug("DEBUG: Output of parallel execute: #{output}, exitcode: #{exitcode}, from: #{sender}")
-                
+
                 #TODO: Why?
                 #output.each do |o|
-                #  r = MCollectiveApplicationContainerProxy.sanitize_result(o[:result_stdout]) if o.kind_of?(Hash) and o.include?(:result_stdout)
+                #  r = MCollectiveApplicationContainerProxy.sanitize_result(o[:result_stdout], exitcode) if o.kind_of?(Hash) and o.include?(:result_stdout)
                 #  o[:result_stdout] = r.resultIO.string.chomp if r and (r.resultIO.string.chomp.length != 0)
                 #end if output.kind_of?(Array)
                 

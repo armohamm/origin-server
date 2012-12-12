@@ -62,12 +62,12 @@ class CloudUser
     self.capabilities["max_gears"]
   end
 
-  def save
+  def save(options = {})
     res = false
     notify_observers(:before_cloud_user_create)
     begin
       begin
-        res = mongoid_save
+        res = mongoid_save(options)
         notify_observers(:cloud_user_create_success)
       rescue Exception => e
         Rails.logger.debug e
@@ -93,8 +93,12 @@ class CloudUser
       self.reload
       self.run_jobs
     else
-      self.ssh_keys.push key
-      self.save
+      #TODO shouldn't << always work???
+      if self.ssh_keys.exists?
+        self.ssh_keys << key
+      else
+        self.ssh_keys = [key]
+      end
     end
   end
   
