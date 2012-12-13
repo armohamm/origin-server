@@ -39,10 +39,6 @@ class RestApi_V1 < RestApi
         data.each do |gear_hash|
           obj = RestApplicationEstimate_V1.to_obj(gear_hash)
         end
-      when 'application_templates'
-        data.each do |template_hash|
-          obj = RestApplicationTemplate_V1.to_obj(template_hash)
-        end
       when 'descriptor'
         # no-op
       when 'domain'
@@ -106,9 +102,6 @@ estimates_app_get_v1 = RestApi_V1.new("/estimates/application")
 estimates_app_get_v1.request.merge!({ 'id' => 'application', 'descriptor' => "--- \nName: TestApp1\nRequires: \n- php-5.3\n" })
 estimates_app_get_v1.response = RestApplicationEstimate_V1.new
 estimates_app_get_v1.response_type = "application_estimates"
- 
-template_list_get_v1 = RestApi_V1.new("/application_templates")
-template_list_get_v1.response_type = "application_templates"
 
 domain_add_post_v1 = RestApi_V1.new("/domains", "POST")
 dom_id = gen_uuid[0..9]
@@ -283,7 +276,6 @@ REST_CALLS_V1 = [
                   cartridge_list_get_v1,
                   estimates_list_get_v1,
                   estimates_app_get_v1,
-                  template_list_get_v1,
                   domain_add_post_v1,
                   domains_list_get_v1,
                   domain_get_v1,

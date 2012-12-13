@@ -145,7 +145,6 @@ class BaseApi_V1 < BaseObj_V1
            Param_V1.new("id", "string")
           ]),
          "LIST_CARTRIDGES" => Link_V1.new("GET", "cartridges"),
-         "LIST_TEMPLATES" => Link_V1.new("GET", "application_templates"),
          "LIST_ESTIMATES" => Link_V1.new("GET", "estimates")
     } unless $nolinks
   end
@@ -235,17 +234,6 @@ class RestApplicationEstimate_V1 < BaseObj_V1
   end
 end
 
-class RestApplicationTemplate_V1 < BaseObj_V1
-  attr_accessor :uuid, :display_name, :descriptor_yaml, :git_url, :tags, :gear_cost, :metadata
-  attr_accessor :links
-
-  def initialize
-    self.uuid, self.display_name, self.descriptor_yaml = nil, nil, nil
-    self.git_url, self.tags, self.gear_cost, self.metadata = nil, nil, nil, nil
-    self.links = nil
-  end
-end
-
 class RestDomain_V1 < BaseObj_V1
   attr_accessor :id, :suffix, :links
 
@@ -258,7 +246,6 @@ class RestDomain_V1 < BaseObj_V1
       "ADD_APPLICATION" => Link_V1.new("POST", "domains/#{id}/applications",
         [Param_V1.new("name", "string")],
         [OptionalParam_V1.new("cartridge", "string"),
-         OptionalParam_V1.new("template", "string"),
          OptionalParam_V1.new("scale", "boolean", [true, false], false),
          OptionalParam_V1.new("gear_profile", "string", ["small"], "small")]),
       "UPDATE" => Link_V1.new("PUT", "domains/#{id}",
