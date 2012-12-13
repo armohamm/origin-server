@@ -32,6 +32,13 @@ class RestApi_V1 < RestApi
           obj = RestCartridge_V1.to_obj(cart_hash)
           obj.valid
         end
+      #when 'estimates'
+      #  obj = RestEstimates_V1.to_obj(data)
+      #  self.response.compare(obj)
+      #when 'application_estimates'
+      #  data.each do |gear_hash|
+      #    obj = RestApplicationEstimate_V1.to_obj(gear_hash)
+      #  end
       when 'descriptor'
         # no-op
       when 'domain'
@@ -88,6 +95,15 @@ user_get_v1.response_type = "user"
 
 cartridge_list_get_v1 = RestApi_V1.new("/cartridges")
 cartridge_list_get_v1.response_type = "cartridges"
+
+#estimates_list_get_v1 = RestApi_V1.new("/estimates")
+#estimates_list_get_v1.response = RestEstimates_V1.new
+#estimates_list_get_v1.response_type = "estimates" 
+
+#estimates_app_get_v1 = RestApi_V1.new("/estimates/application")
+#estimates_app_get_v1.request.merge!({ 'id' => 'application', 'descriptor' => "--- \nName: TestApp1\nRequires: \n- php-5.3\n" })
+#estimates_app_get_v1.response = RestApplicationEstimate_V1.new
+#estimates_app_get_v1.response_type = "application_estimates"
 
 domain_add_post_v1 = RestApi_V1.new("/domains", "POST")
 dom_id = gen_uuid[0..9]
@@ -260,6 +276,8 @@ REST_CALLS_V1 = [
                   environment_get_v1,
                   user_get_v1,
                   cartridge_list_get_v1,
+                  #estimates_list_get_v1,
+                  #estimates_app_get_v1,
                   domain_add_post_v1,
                   domains_list_get_v1,
                   domain_get_v1,
