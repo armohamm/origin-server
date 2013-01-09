@@ -102,7 +102,7 @@ class EmbCartController < BaseController
         colocate_component_instance = application.component_instances.find_by(cartridge_name: colocate_with)
         colocate_component_instance = colocate_component_instance.first if colocate_component_instance.class == Array
       rescue Mongoid::Errors::DocumentNotFound
-        return render_error(:bad_request, "Invalid colocation specified. No component matches #{colocate_with}", 109, "EMBED_CARTRIDGE", "cartridge")      
+        return render_error(:unprocessable_entity, "Invalid colocation specified. No component matches #{colocate_with}", 109, "EMBED_CARTRIDGE", "cartridge")      
       end
     end
     
@@ -113,7 +113,7 @@ class EmbCartController < BaseController
 
       if cart.nil?
         carts = CartridgeCache.cartridge_names("embedded")
-        return render_error(:bad_request, "Invalid cartridge. Valid values are (#{carts.join(', ')})",
+        return render_error(:unprocessable_entity, "Invalid cartridge. Valid values are (#{carts.join(', ')})",
                             109, "EMBED_CARTRIDGE", "cartridge")
       end
 
@@ -132,15 +132,21 @@ class EmbCartController < BaseController
         group_overrides << group_override
       end
 
-      application.add_features([name], group_overrides)
+      cart_create_reply = application.add_features([name], group_overrides)
       
       component_instance = application.component_instances.find_by(cartridge_name: cart.name, component_name: comp.name)
       cartridge = get_rest_cartridge(application, component_instance, application.group_instances_with_scale, application.group_overrides)
-      return render_success(:created, "cartridge", cartridge, "EMBED_CARTRIDGE", nil, nil, nil, nil)
+
+      messages = []
+      log_msg = "Added #{name} to application #{id}"
+      messages.push(Message.new(:info, log_msg))
+      messages.push(Message.new(:info, cart_create_reply.resultIO.string, 0, :result))
+      messages.push(Message.new(:info, cart_create_reply.appInfoIO.string, 0, :appinfo))
+      return render_success(:created, "cartridge", cartridge, "EMBED_CARTRIDGE", log_msg, nil, nil, messages)
     rescue OpenShift::GearLimitReachedException => e
       return render_error(:unprocessable_entity, "Unable to add cartridge: #{e.message}", 104, "ADD_APPLICATION")
     rescue OpenShift::UserException => e
-      return render_error(:bad_request, "Invalid cartridge. #{e.message}", 109, "EMBED_CARTRIDGE", "cartridge")
+      return render_error(:unprocessable_entity, "Invalid cartridge. #{e.message}", 109, "EMBED_CARTRIDGE", "cartridge")
     end
   end
 
@@ -182,9 +188,9 @@ class EmbCartController < BaseController
       
       render_success(:ok, "application", app, "REMOVE_CARTRIDGE", "Removed #{cartridge} from application #{id}", true)
     rescue OpenShift::UserException => e
-      return render_error(:bad_request, "Application is currently busy performing another operation. Please try again in a minute.", 129, "REMOVE_CARTRIDGE")
+      return render_error(:service_unavailable, "Application is currently busy performing another operation. Please try again in a minute.", 129, "REMOVE_CARTRIDGE")
     rescue Mongoid::Errors::DocumentNotFound
-      return render_error(:bad_request, "Cartridge #{cartridge} not embedded within application #{id}", 129, "REMOVE_CARTRIDGE")
+      return render_error(:not_found, "Cartridge #{cartridge} not embedded within application #{id}", 129, "REMOVE_CARTRIDGE")
     end
   end
 

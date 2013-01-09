@@ -90,7 +90,8 @@ class Application
     features << "web_proxy" if scalable
     if app.valid?
       begin
-        app.add_features(features, group_overrides, init_git_url)
+        add_feature_result = app.add_features(features, group_overrides, init_git_url)
+        result_io.append add_feature_result
       rescue Exception => e
         app.delete
         raise e
@@ -109,9 +110,10 @@ class Application
   end
 
   def self.find_by_gear_uuid(gear_uuid)
-    obj_id = Moped::BSON::ObjectId(gear_uuid)
-    app = Application.where("group_instances.gears._id" => obj_id).first
-    gear = app.group_instances.map { |gi| gi.gears.select { |g| g._id == obj_id } }.flatten[0]
+    # obj_id = Moped::BSON::ObjectId(gear_uuid)
+    obj_id = gear_uuid.to_s
+    app = Application.where("group_instances.gears.uuid" => obj_id).first
+    gear = app.group_instances.map { |gi| gi.gears.select { |g| g.uuid== obj_id } }.flatten[0]
     return [app, gear]
   end
 
@@ -131,6 +133,11 @@ class Application
     self.app_ssh_keys = []
     self.pending_op_groups = []
     self.save
+  end
+
+  def uuid
+    @uuid = self._id.to_s if @uuid=="" or @uuid.nil?
+    @uuid
   end
 
   # Adds an additional namespace to the application. This function supports the first step of the update namespace workflow.
@@ -668,7 +675,8 @@ class Application
     fqdn = fqdn.downcase
     
     Application.run_in_application_lock(self) do
-      return unless aliases.include? fqdn
+      raise OpenShift::UserException.new("Alias '#{fqdn}' does not exist for '#{self.name}'") unless aliases.include? fqdn
+      
       aliases.delete(fqdn)
       op_group = PendingAppOpGroup.new(op_type: :remove_alias, args: {"fqdn" => fqdn})
       self.pending_op_groups.push op_group
@@ -1333,6 +1341,10 @@ class Application
         group_instance = self.group_instances.find(change[:from])
         if change[:to].nil?
           remove_gears += change[:from_scale][:current]
+
+          singleton_gear = group_instance.gears.find_by(host_singletons: true)
+          ops = calculate_remove_component_ops(change[:removed], group_instance, singleton_gear)
+          pending_ops.push(*ops)
 
           ops=calculate_gear_destroy_ops(group_instance._id.to_s, group_instance.gears.map{|g| g._id.to_s}, group_instance.addtl_fs_gb)
           pending_ops.push(*ops)
