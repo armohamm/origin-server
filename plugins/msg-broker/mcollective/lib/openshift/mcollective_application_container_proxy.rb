@@ -151,8 +151,6 @@ module OpenShift
             district_uuid = get_district_uuid unless district_uuid
           end
           if district_uuid && district_uuid != 'NONE'
-            #cleanup
-            #OpenShift::DataStore.instance.unreserve_district_uid(district_uuid, uid)
             District::unreserve_uid(district_uuid, uid)
           end
         end
@@ -166,8 +164,6 @@ module OpenShift
             district_uuid = get_district_uuid unless district_uuid
           end
           if district_uuid && district_uuid != 'NONE'
-            #cleanup
-            #OpenShift::DataStore.instance.inc_district_externally_reserved_uids_size(district_uuid)
             District::inc_externally_reserved_uids_size(district_uuid)
           end
         end
