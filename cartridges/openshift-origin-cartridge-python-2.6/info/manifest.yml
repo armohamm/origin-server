@@ -6,7 +6,7 @@ License: Python License
 License-Url: http://docs.python.org/license.html
 Vendor: Python Software Foundation
 Categories:
-  - scales
+  - service
   - web_framework
 Website: "http://www.python.org"
 Help-Topics:
@@ -14,7 +14,7 @@ Help-Topics:
 Cart-Data:
   - Key: OPENSHIFT_REPO_DIR
     Type: environment
-    Description: "Application root directory where application files reside. This directory is reset everytime you do a git-push"
+    Description: "Application root directory where application files reside. This directory is reset every time you do a git-push"
   - Key: OPENSHIFT_INTERNAL_PORT
     Type: environment
     Description: "Internal port to which the web-framework binds to."

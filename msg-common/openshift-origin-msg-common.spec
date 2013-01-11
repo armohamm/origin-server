@@ -12,15 +12,13 @@
 
 Summary:        Common dependencies of the msg components for OpenShift server and node
 Name:           openshift-origin-msg-common
-Version: 1.1.1
+Version:        1.1.2
 Release:        1%{?dist}
-Group:          Network/Daemons
 License:        ASL 2.0
 URL:            http://openshift.redhat.com
-Source0:        http://mirror.openshift.com/pub/openshift-origin/source/%{name}-%{version}.tar.gz
+Source0:        http://mirror.openshift.com/pub/origin-server/source/%{name}/%{name}-%{version}.tar.gz
 Requires:       %{?scl:%scl_prefix}mcollective-common
-
-BuildArch: noarch
+BuildArch:      noarch
 
 %description
 Provides the common dependencies of the msg components for OpenShift server and node
@@ -31,21 +29,23 @@ Provides the common dependencies of the msg components for OpenShift server and 
 %build
 
 %install
-rm -rf %{buildroot}
 mkdir -p %{buildroot}%{mco_root}agent
 mkdir -p %{buildroot}%{mco_root}validator
-cp agent/* %{buildroot}%{mco_root}agent/
-cp validator/* %{buildroot}%{mco_root}validator/
-
-%clean
-rm -rf %{buildroot}
+cp -p agent/* %{buildroot}%{mco_root}agent/
+cp -p validator/* %{buildroot}%{mco_root}validator/
+chmod 644 %{buildroot}%{mco_root}agent/*
+chmod 644 %{buildroot}%{mco_root}validator/*
 
 %files
-%defattr(-,root,root,-)
-%attr(0644,-,-) %{mco_root}agent/*
-%attr(0644,-,-) %{mco_root}validator/*
+%{mco_root}agent/*
+%{mco_root}validator/*
 
 %changelog
+* Thu Jan 10 2013 Adam Miller <admiller@redhat.com> 1.1.2-1
+- move chmod to install section instead of files section (tdawson@redhat.com)
+- cleanup to fedora standards (tdawson@redhat.com)
+- fix source URL (tdawson@redhat.com)
+
 * Wed Dec 12 2012 Adam Miller <admiller@redhat.com> 1.1.1-1
 - bump_minor_versions for sprint 22 (admiller@redhat.com)
 

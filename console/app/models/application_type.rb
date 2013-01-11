@@ -19,7 +19,6 @@ class ApplicationType
 
   attr_accessor :id, :display_name, :version, :description
   attr_accessor :cartridges, :initial_git_url, :initial_git_branch, :cartridges_spec
-  attr_accessor :template # DEPRECATED
   attr_accessor :website, :license, :license_url
   attr_accessor :tags, :learn_more_url
   attr_accessor :help_topics
@@ -91,14 +90,12 @@ class ApplicationType
 
   def source_priority
     case source
-    when :template; -1
     when :cartridge; -2
     else; 0
     end
   end
 
   def cartridge?; source == :cartridge; end
-  def template?; source == :template; end
   def quickstart?; source == :quickstart; end
 
   def matching_cartridges
@@ -106,13 +103,9 @@ class ApplicationType
   end
 
   def >>(app)
-    if template
-      app.template = template.uuid
-    else
-      app.cartridges = cartridges if cartridges.present?
-      app.initial_git_url = initial_git_url if initial_git_url
-      app.initial_git_branch = initial_git_branch if initial_git_branch
-    end
+    app.cartridges = cartridges if cartridges.present?
+    app.initial_git_url = initial_git_url if initial_git_url
+    app.initial_git_branch = initial_git_branch if initial_git_branch
     app
   end
 

@@ -53,6 +53,18 @@ module OpenShift
       @profiles.each{ |profile| @_profile_map[p.name] = p }
     end
     
+    def is_plugin?
+      return categories.include?('web_proxy') || categories.include?('ci_builder') || categories.include?('plugin')
+    end
+    
+    def is_service?
+      return categories.include?('service')
+    end
+
+    def is_embeddable?
+      return categories.include?('embedded')
+    end
+    
     def from_descriptor(spec_hash={})
       self.name = spec_hash["Name"]
       self.version = spec_hash["Version"] || "0.0"

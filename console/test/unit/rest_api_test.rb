@@ -1361,12 +1361,12 @@ class RestApiTest < ActiveSupport::TestCase
     assert group1.send(:move_features, group2) # nothing is moved, but group1 is still empty and should be purged
   end
 
-  def a_quickstart(summary_message='')
-    summary = "An awesome blog hosting platform with a rich ecosystem" << summary_message
+  def a_quickstart(additional_tags=[])
+    tags = ["blog", "instant_app", "php", "wordpress"].concat(additional_tags).join(", ")
     quickstart = {data:[
       {quickstart:{
         body:"<p>An awesome blog hosting platform with a rich ecosystem<\/p>",
-        summary: summary,
+        summary: "An awesome blog hosting platform with a rich ecosystem",
         id:"12069",
         href:"\/community\/content\/wordpress-34",
         name:"Wordpress 3.4",
@@ -1374,17 +1374,17 @@ class RestApiTest < ActiveSupport::TestCase
         cartridges:"php-5.3, mysql-5.1",
         initial_git_url:"https:\/\/github.com\/openshift\/wordpress-example",
         language:"PHP",
-        tags:"blog, instant_app, php, wordpress",
+        tags: tags,
         website:"https:\/\/www.wordpress.org"
       }}
     ]}
   end
 
-  def mock_quickstart(summary_message='')
+  def mock_quickstart(additional_tags=[])
     Quickstart.reset!
     RestApi.reset!
 
-    quickstart = a_quickstart(summary_message)
+    quickstart = a_quickstart(additional_tags)
 
     ActiveResource::HttpMock.respond_to do |mock|
       mock.get '/broker/rest/api.json', anonymous_json_header, {:data => {
@@ -1479,19 +1479,7 @@ class RestApiTest < ActiveSupport::TestCase
   end
 
   def test_non_scalable_quickstarts
-    mock_quickstart(" Note: non-scalable")
-
-    assert_equal 1, Quickstart.promoted.length
-    assert q = Quickstart.promoted.first
-    assert_equal false, q.scalable?
-
-    mock_quickstart(" NOT SCALABLE")
-
-    assert_equal 1, Quickstart.promoted.length
-    assert q = Quickstart.promoted.first
-    assert_equal false, q.scalable?
-
-    mock_quickstart(" non SCALABLE")
+    mock_quickstart(['not_scalable'])
 
     assert_equal 1, Quickstart.promoted.length
     assert q = Quickstart.promoted.first

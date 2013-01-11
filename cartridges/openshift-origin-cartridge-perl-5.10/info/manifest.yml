@@ -4,7 +4,7 @@ Description: "Perl is a high-level, general-purpose, interpreted, dynamic progra
 Version: 1.0.0
 License: ASL 2.0
 Categories:
-  - cartridge
+  - service
   - perl
   - web_framework
 Website: "http://www.perl.org"
@@ -19,7 +19,7 @@ Cart-Data:
     Description: "Directory to store application temporary files."
   - Key: OPENSHIFT_REPO_DIR
     Type: environment
-    Description: "Application root directory where application files reside. This directory is reset everytime you do a git-push"
+    Description: "Application root directory where application files reside. This directory is reset every time you do a git-push"
   - Key: OPENSHIFT_INTERNAL_PORT
     Type: environment
     Description: "Internal port to which the web-framework binds to."

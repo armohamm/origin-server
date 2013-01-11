@@ -5,6 +5,7 @@ Version: 1.0.2
 License: ASL 2.0
 Vendor:  jboss.com
 Categories:
+  - service
   - java
   - jboss
   - tomcat
@@ -21,7 +22,7 @@ Cart-Data:
     Description: "Directory to store application temporary files."
   - Key: OPENSHIFT_REPO_DIR
     Type: environment
-    Description: "Application root directory where application files reside. This directory is reset everytime you do a git-push"
+    Description: "Application root directory where application files reside. This directory is reset every time you do a git-push"
   - Key: OPENSHIFT_INTERNAL_PORT
     Type: environment
     Description: "Internal port to which the web-framework binds to."
@@ -44,11 +45,12 @@ Cart-Data:
     Type: environment
     Description: "Unique ID which identified the gear. This value changes between gears."
 Provides:
-  - "jbossews-1.0"	
+  - "jbossews-1.0"
   - "jbossews"
   - "jbossews(version) = 1.0.2"
   - "jbossews(version) >= 1.0"
-  - "jboss-ews1.0.0"
+  - "jboss-ews-1.0"
+  - "jboss-ews-1.0.0"
 Publishes:
   get-internal-uri:
     Type: "NET_TCP:http"
