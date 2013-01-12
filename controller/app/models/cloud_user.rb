@@ -99,7 +99,7 @@ class CloudUser
     if domains.count > 0
       pending_op = PendingUserOps.new(op_type: :add_ssh_key, arguments: key.attributes.dup, state: :init, on_domain_ids: domains.map{|d|d._id.to_s}, created_at: Time.new)
       CloudUser.where(_id: self.id).update_all({ "$push" => { pending_ops: pending_op.serializable_hash , ssh_keys: key.serializable_hash }})
-      self.reload
+      self.reload.with(consistency: :strong)
       self.run_jobs
     else
       #TODO shouldn't << always work???
@@ -126,7 +126,7 @@ class CloudUser
     if domains.count > 0
       pending_op = PendingUserOps.new(op_type: :delete_ssh_key, arguments: key.attributes.dup, state: :init, on_domain_ids: domains.map{|d|d._id.to_s}, created_at: Time.new)
       CloudUser.where(_id: self.id).update_all({ "$push" => { pending_ops: pending_op.serializable_hash } , "$pull" => { ssh_keys: key.serializable_hash }})
-      self.reload
+      self.reload.with(consistency: :strong)
       self.run_jobs      
     else
       key.delete
@@ -192,10 +192,14 @@ class CloudUser
           op.pending_domains.each { |domain| domain.remove_ssh_key(self._id, op.arguments, op) }
         end
         begin
-          self.pending_ops.find_by(_id: op._id, :state.ne => :completed).set(state: :queued)
+          self.reload.with(consistency: :strong)
+          self.pending_ops.find_by(_id: op._id, :state.ne => :completed).set(:state, :queued)
         rescue Mongoid::Errors::DocumentNotFound
           #ignore. Op state is completed
         end
+        op.reload.with(consistency: :strong)
+        op.close_op
+        op.delete if op.completed?
       end
       true
     rescue Exception => ex

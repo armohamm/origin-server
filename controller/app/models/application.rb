@@ -335,7 +335,7 @@ class Application
       self.pending_op_groups.push PendingAppOpGroup.new(op_type: :add_features, args: {"features" => features, "group_overrides" => group_overrides, "init_git_url"=>init_git_url}, user_agent: self.user_agent)
       self.run_jobs(result_io)
     end
-    domain.reload
+    domain.reload.with(consistency: :strong)
     domain.run_jobs
     result_io
   end
@@ -352,7 +352,7 @@ class Application
       self.pending_op_groups.push PendingAppOpGroup.new(op_type: :remove_features, args: {"features" => features, "group_overrides" => group_overrides}, user_agent: self.user_agent)
       self.run_jobs(result_io)
     end
-    domain.reload
+    domain.reload.with(consistency: :strong)
     domain.run_jobs
     result_io
   end
@@ -837,7 +837,7 @@ class Application
   # True on success or False if unable to acquire the lock or no pending jobs.
   def run_jobs(result_io=nil)
     result_io = ResultIO.new if result_io.nil?
-    self.reload
+    self.reload.with(consistency: :strong)
     return true if (self.pending_op_groups.count == 0)
     begin
       while self.pending_op_groups.count > 0
@@ -939,16 +939,11 @@ class Application
           end
         end
 
-        Rails.logger.debug "-----------------------------------"
-        Rails.logger.debug op_group.inspect
-        op_group.pending_ops.each{ |p| Rails.logger.debug p.inspect}
-        Rails.logger.debug "-----------------------------------"
-    
         if op_group.op_type != :delete_app
           op_group.execute(result_io)
           unreserve_gears(op_group.num_gears_removed)
           op_group.delete
-          self.reload
+          self.reload.with(consistency: :strong)
         end
         
       end
@@ -1035,14 +1030,6 @@ class Application
     connections, new_group_instances, cleaned_group_overrides = elaborate(features, group_overrides)
     current_group_instance = self.group_instances.map { |gi| gi.to_hash }
     changes, moves = compute_diffs(current_group_instance, new_group_instances)
-    
-    Rails.logger.debug ""
-    Rails.logger.debug "-----------------------------------"
-    Rails.logger.debug "features: #{features}, group_overrides: #{group_overrides.inspect}"
-    Rails.logger.debug "final group instances: #{new_group_instances.inspect}"
-    Rails.logger.debug "changes: #{changes.inspect}, moves: #{moves}"
-    Rails.logger.debug "-----------------------------------"
-    Rails.logger.debug ""
     
     calculate_ops(changes, moves, connections, cleaned_group_overrides,init_git_url)
   end
@@ -1348,15 +1335,23 @@ class Application
         if change[:to].nil?
           remove_gears += change[:from_scale][:current]
 
+          gear_destroy_ops=calculate_gear_destroy_ops(group_instance._id.to_s, group_instance.gears.map{|g| g._id.to_s}, group_instance.addtl_fs_gb)
+          pending_ops.push(*gear_destroy_ops)
+          
+          op_ids = gear_destroy_ops.map{|op| op._id.to_s}
+          destroy_ginst_op  = PendingAppOp.new(op_type: :destroy_group_instance, args: {"group_instance_id"=> group_instance._id.to_s}, prereq: op_ids)
+          pending_ops.push(destroy_ginst_op)
+          
           singleton_gear = group_instance.gears.find_by(host_singletons: true)
           ops = calculate_remove_component_ops(change[:removed], group_instance, singleton_gear)
           pending_ops.push(*ops)
-
-          ops=calculate_gear_destroy_ops(group_instance._id.to_s, group_instance.gears.map{|g| g._id.to_s}, group_instance.addtl_fs_gb)
-          pending_ops.push(*ops)
-          op_ids = ops.map{|op| op._id.to_s}
-          destroy_ginst_op  = PendingAppOp.new(op_type: :destroy_group_instance, args: {"group_instance_id"=> group_instance._id.to_s}, prereq: op_ids)
-          pending_ops.push(destroy_ginst_op)
+          
+          ops.each do |op|
+            if (op.op_type == :del_component)
+              op.prereq += gear_destroy_ops.map{|g| g._id.to_s}
+              destroy_ginst_op.prereq << op._id.to_s
+            end
+          end
         else
           scale_change = 0
           if change[:to_scale][:current].nil?
@@ -1548,7 +1543,7 @@ class Application
       until Lock.lock_user(owner, self)
         sleep 1
       end
-      owner.reload
+      owner.reload.with(consistency: :strong)
       owner_capabilities = owner.get_capabilities
       if owner.consumed_gears + num_gears_added > owner_capabilities["max_gears"]
         raise OpenShift::GearLimitReachedException.new("#{owner.login} is currently using #{owner.consumed_gears} out of #{owner_capabilities["max_gears"]} limit and this application requires #{num_gears} additional gears.")
@@ -1571,7 +1566,7 @@ class Application
       until Lock.lock_user(owner, self)
         sleep 1
       end
-      owner.reload
+      owner.reload.with(consistency: :strong)
       owner.consumed_gears -= num_gears_removed
       owner.save
     ensure
