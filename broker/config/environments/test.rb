@@ -41,7 +41,7 @@ Broker::Application.configure do
     :host_port => "localhost:27017",
     :user => "openshift",
     :password => "mooo",
-    :db => "openshift_broker_dev",
+    :db => "openshift_broker_test",
     :ssl => conf.get_bool("MONGO_SSL", "false")
   }
 
