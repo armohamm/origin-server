@@ -33,7 +33,7 @@ OpenShift Origin sources are arranged into 5 repositories:
           * [DNS plugin interface](broker/file.README.dns_plugin.html)
           * [Authentication plugin interface](broker/file.README.auth_plugin.html)
   + [Node](node/index.html): Documentation for Models, libraries used on the Node
-      * [Building a V1 cartridge](node/file.README.writing_v1_cartridge.html)
+      * [Building a V1 cartridge](node/file.README.writing_v1_cartridges.html)
       * [Building a V2 cartridge](node/file.README.writing_cartridges.html)
       * [Design of the Node module](node/file.README.node_module_design.html)
 * Building and installing OpenShift Origin
