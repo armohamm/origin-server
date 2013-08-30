@@ -1,5 +1,6 @@
 require 'openshift-origin-node/utils/node_logger'
 require 'ipaddr'
+require 'libvirt'
 require_relative 'libvirt_resource_manager'
 
 ::OpenShift::Runtime::Utils::Cgroups.implementation_class = ::OpenShift::Runtime::Containerization::Cgroups::LibvirtResourceManager
@@ -142,8 +143,11 @@ module OpenShift
           was_running = container_running?
 
           unless was_running
-            out, err, rc = virt_command("start #{@container.uuid}")
-            raise Exception.new( "Failed to start lxc container. rc=#{rc}, out=#{out}, err=#{err}" ) if rc != 0
+            run_in_virt_lock do |conn, dom|
+              raise ArgumentError.new("Container not found") if dom.nil?
+              dom.create
+              raise Exception.new( "Failed to start lxc container" ) if dom.state[0] != Libvirt::Domain::RUNNING
+            end
           end
 
           if (not was_running) || (options.has_key?(:from_libvirt_hook) && options[:from_libvirt_hook])
@@ -254,8 +258,11 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
         def stop(option={})
           return if File.exists?("/dev/container-id")
 
-          out, err, rc = virt_command("shutdown #{@container.uuid}")
-          raise Exception.new( "Failed to stop lxc container. rc=#{rc}, out=#{out}, err=#{err}" ) if rc != 0
+          run_in_virt_lock do |conn, dom|
+            raise ArgumentError.new("Container not found") if dom.nil?
+            dom.destroy
+            raise Exception.new( "Failed to stop lxc container." ) if dom.state[0] == Libvirt::Domain::RUNNING
+          end
         end
 
         def idle(options={})
@@ -264,10 +271,6 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
 
         def unidle(options={})
           start(options)
-        end
-
-        def boost(&block)
-          yield block
         end
 
         ##
@@ -285,7 +288,7 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
           if host_id < 1 || host_id > 127
             raise "Supplied host identifier #{host_id} must be between 1 and 127"
           end
-          "169.254.169." + host_id.to_s
+          "127.0.250." + host_id.to_s
         end
 
         ##
@@ -433,12 +436,19 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
           container_ip = get_nat_ip_address
           @container.add_env_var("OPENSHIFT_INT_" + endpoint.private_port_name, container_port)
 
-          command = "iptables -t nat -A PREROUTING " +
-              "-d #{container_ip} -p tcp --dport=#{container_port} " +
-              "-j DNAT --to-destination #{private_ip}:#{private_port};" +
-              #"iptables -t nat -A OUTPUT " +
-              #"-d #{container_ip} -p tcp --dport=#{container_port} " +
-              #"-j DNAT --to-destination #{private_ip}:#{private_port};" +
+          command =
+              #"iptables -t nat -A PREROUTING -d #{container_ip} -p tcp --dport=#{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+              #"iptables -t nat -A OUTPUT -d #{container_ip} -p tcp --dport=#{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+
+              "iptables -t nat -A PREROUTING -d #{container_ip} -m tcp -p tcp --dport #{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+              "iptables -t nat -A OUTPUT -d #{container_ip} -m tcp -p tcp --dport #{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+
+              # Fedora 19 just needs this
+              "iptables -t filter -A INPUT -d #{private_ip} -m conntrack --ctstate NEW -m tcp -p tcp --dport #{private_port} -j ACCEPT;" +
+
+              # RHEL 6.4 seems to need both the above rule and this
+              "iptables -t filter -A INPUT -d #{container_ip} -m conntrack --ctstate NEW -m tcp -p tcp --dport #{container_port} -j ACCEPT;" +
+
               "iptables-save > #{@container.container_dir}/.iptables;"
           run_in_container_root_context(command)
           [container_ip, container_port]
@@ -450,12 +460,19 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
           container_ip = get_nat_ip_address
           @container.remove_env_var("OPENSHIFT_INT_" + endpoint.private_port_name, container_port)
 
-          command = "iptables -t nat -D PREROUTING " +
-              "-d #{container_ip} -p tcp --dport=#{container_port} " +
-              "-j DNAT --to-destination #{private_ip}:#{private_port};" +
-              #"iptables -t nat -D OUTPUT " +
-              #"-d #{container_ip} -p tcp --dport=#{container_port} " +
-              #"-j DNAT --to-destination #{private_ip}:#{private_port};" +
+          command =
+              #"iptables -t nat -D PREROUTING -d #{container_ip} -p tcp --dport=#{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+              #"iptables -t nat -D OUTPUT -d #{container_ip} -p tcp --dport=#{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+
+              "iptables -t nat -D PREROUTING -d #{container_ip} -m tcp -p tcp --dport #{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+              "iptables -t nat -D OUTPUT -d #{container_ip} -m tcp -p tcp --dport #{container_port} -j DNAT --to-destination #{private_ip}:#{private_port};" +
+
+              # Fedora 19 just needs this
+              "iptables -t filter -D INPUT -d #{private_ip} -m conntrack --ctstate NEW -m tcp -p tcp --dport #{private_port} -j ACCEPT;" +
+
+              # RHEL 6.4 seems to need both the above rule and this
+              "iptables -t filter -D INPUT -d #{container_ip} -m conntrack --ctstate NEW -m tcp -p tcp --dport #{container_port} -j ACCEPT;" +
+
               "iptables-save > #{@container.container_home}/.iptables;"
           run_in_container_root_context(command)
         end
@@ -519,7 +536,7 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
 
         def reload_network
           set_default_route
-          define_dummy_iface
+          #define_dummy_iface
           recreate_all_container_endpoints
           recreate_all_public_endpoints
         end
@@ -647,45 +664,38 @@ Dir(after)    #{@container.uuid}/#{@container.uid} => #{list_home_dir(@container
           end
         end
 
-        def container_list
-          out, _, _ = virt_command("list --all")
-          out.split("\n")[2..-1].map! do |m|
-            m = m.split(" ")
-            {
-              name:  m[1],
-              state: m[2..-1].join(" "),
-            }
-          end
-        end
-
         def container_exists?
           return false unless File.exist?("/etc/libvirt-sandbox/services/#{@container.uuid}")
-          container_list.each do |m|
-            return true if m[:name] == @container.uuid
+          run_in_virt_lock do |conn, dom|
+            not dom.nil?
           end
-          return false
         end
 
         def container_running?
-          container_list.each do |m|
-            return true if m[:name] == @container.uuid and m[:state] == "running"
+          run_in_virt_lock do |conn, dom|
+            raise ArgumentError.new("Container not found") if dom.nil?
+            dom.state[0] == Libvirt::Domain::RUNNING
           end
-          return false
         end
 
-        def virt_command(cmd, options={})
+        def run_in_virt_lock(&block)
           virt_lock_file = "/var/lock/oo-virt"
-          out, err, rc = 0
           File.open(virt_lock_file, File::RDWR|File::CREAT|File::TRUNC, 0o0600) do | virt_lock |
             virt_lock.fcntl(Fcntl::F_SETFD, Fcntl::FD_CLOEXEC)
             virt_lock.flock(File::LOCK_EX)
 
-            out, err, rc = ::OpenShift::Runtime::Utils::oo_spawn("/usr/bin/virsh -c lxc:/// #{cmd}", options)
-
-            virt_lock.flock(File::LOCK_UN)
+            begin
+              conn = Libvirt::open("lxc:///")
+              begin
+                dom = conn.lookup_domain_by_name @container.uuid
+                return block.call(conn, dom)
+              ensure
+                conn.close
+              end
+            ensure
+              virt_lock.flock(File::LOCK_UN)
+            end
           end
-
-          [out, err, rc]
         end
 
         def virt_sandbox_command(cmd, options={})
